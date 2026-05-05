@@ -1,6 +1,7 @@
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
+const express = require("express")
 
 const {
   default: makeWASocket,
@@ -9,6 +10,16 @@ const {
   fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys")
 
+// =========================
+// KEEP ALIVE (ANTI SLEEP)
+// =========================
+const app = express()
+app.get("/", (req, res) => res.send("Bot aktif 🚀"))
+app.listen(3000, () => console.log("🌐 Web aktif di port 3000"))
+
+// =========================
+// START BOT
+// =========================
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("session")
   const { version } = await fetchLatestBaileysVersion()
@@ -23,8 +34,10 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // CONNECTION
+  // 🔥 ANTI DISCONNECT PRO
   // =========================
+  let retryCount = 0
+
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
 
@@ -33,15 +46,35 @@ async function startBot() {
       qrcode.generate(qr, { small: true })
     }
 
-    if (connection === "close") {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-
-      if (shouldReconnect) startBot()
+    if (connection === "connecting") {
+      console.log("🔄 Menghubungkan...")
     }
 
     if (connection === "open") {
       console.log("✅ BOT AKTIF")
+      retryCount = 0
+    }
+
+    if (connection === "close") {
+      const reason = lastDisconnect?.error?.output?.statusCode
+      const shouldReconnect = reason !== DisconnectReason.loggedOut
+
+      console.log("❌ Koneksi putus. Reason:", reason)
+
+      if (shouldReconnect) {
+        retryCount++
+
+        let delay = 3000 * retryCount
+        if (delay > 15000) delay = 15000
+
+        console.log(`🔁 Reconnect ke-${retryCount} dalam ${delay / 1000} detik`)
+
+        setTimeout(() => {
+          startBot()
+        }, delay)
+      } else {
+        console.log("🚫 Session logout! Scan ulang QR")
+      }
     }
   })
 
@@ -57,7 +90,7 @@ async function startBot() {
   })
 
   // =========================
-  // WELCOME MEMBER (PAKAI JPG SENDIRI)
+  // WELCOME MEMBER
   // =========================
   sock.ev.on("group-participants.update", async (anu) => {
     try {
@@ -126,7 +159,7 @@ async function startBot() {
       if (isAdmin) return
 
       // =========================
-      // 🚫 LINK UNDANGAN WHATSAPP SAJA
+      // 🚫 LINK UNDANGAN WHATSAPP
       // =========================
       const isInvite =
         /chat\.whatsapp\.com/i.test(text) ||
@@ -138,20 +171,15 @@ async function startBot() {
       }
 
       // =========================
-      // 🚫 STATUS TAG GROUP SAJA (FIX)
+      // 🚫 STATUS TAG GROUP SAJA
       // =========================
-      const context = msg.message?.extendedTextMessage?.contextInfo || {}
-
       const isStatusGroupTag =
-        msg.message?.protocolMessage?.type === 25 // ini biasanya dari status mention
+        msg.message?.protocolMessage?.type === 25
 
       if (isStatusGroupTag) {
         await sock.sendMessage(from, { delete: msg.key })
         return
       }
-
-      // ❗ group mention biasa DIIZINKAN
-      // ❗ tag member DIIZINKAN
 
     } catch (err) {
       console.log("ERROR:", err)
@@ -159,4 +187,25 @@ async function startBot() {
   })
 }
 
+// =========================
+// ANTI CRASH GLOBAL
+// =========================
+process.on("uncaughtException", (err) => {
+  console.log("❌ ERROR:", err)
+})
+
+process.on("unhandledRejection", (err) => {
+  console.log("❌ PROMISE ERROR:", err)
+})
+
+// =========================
+// KEEP ALIVE LOG
+// =========================
+setInterval(() => {
+  console.log("🟢 Bot masih hidup:", new Date().toLocaleTimeString())
+}, 60000)
+
+// =========================
+// RUN
+// =========================
 startBot()
