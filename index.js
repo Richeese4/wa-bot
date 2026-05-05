@@ -90,15 +90,15 @@ async function startBot() {
   })
 
   // =========================
-  // WELCOME MEMBER
+  // WELCOME MEMBER (FIX)
   // =========================
   sock.ev.on("group-participants.update", async (anu) => {
     try {
       if (anu.action === "add") {
         for (let user of anu.participants) {
-          if (fs.existsSync("./welcome.jpg")) {
+          if (fs.existsSync(__dirname + "/welcome.jpg")) {
             await sock.sendMessage(anu.id, {
-              image: fs.readFileSync(__dirname + "/welcome.jpg")
+              image: fs.readFileSync(__dirname + "/welcome.jpg"),
               caption: `👋 Selamat datang @${user.split("@")[0]} di group!\nSemoga betah ya ✨`,
               mentions: [user]
             })
@@ -134,7 +134,7 @@ async function startBot() {
       // QRIS
       // =========================
       if (text.toLowerCase() === ".qris") {
-        if (fs.existsSync("./qris.jpg")) {
+        if (fs.existsSync(__dirname + "/qris.jpg")) {
           await sock.sendMessage(from, {
             image: fs.readFileSync(__dirname + "/qris.jpg"),
             caption: "💸 Scan QRIS untuk pembayaran"
@@ -159,7 +159,7 @@ async function startBot() {
       if (isAdmin) return
 
       // =========================
-      // 🚫 LINK UNDANGAN WHATSAPP
+      // 🚫 LINK UNDANGAN WHATSAPP SAJA
       // =========================
       const isInvite =
         /chat\.whatsapp\.com/i.test(text) ||
