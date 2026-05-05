@@ -11,11 +11,16 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// KEEP ALIVE (ANTI SLEEP)
+// KEEP ALIVE
 // =========================
 const app = express()
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
-app.listen(3000, () => console.log("🌐 Web aktif di port 3000"))
+app.listen(3000)
+
+// =========================
+// CACHE ADMIN (ANTI DELAY)
+// =========================
+const groupCache = {}
 
 // =========================
 // START BOT
@@ -27,17 +32,14 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     logger: P({ level: "silent" }),
-    auth: state,
-    browser: ["Windows", "Chrome", "120.0.0"]
+    auth: state
   })
 
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // 🔥 ANTI DISCONNECT PRO
+  // CONNECTION
   // =========================
-  let retryCount = 0
-
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
 
@@ -46,35 +48,15 @@ async function startBot() {
       qrcode.generate(qr, { small: true })
     }
 
-    if (connection === "connecting") {
-      console.log("🔄 Menghubungkan...")
-    }
-
     if (connection === "open") {
       console.log("✅ BOT AKTIF")
-      retryCount = 0
     }
 
     if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode
-      const shouldReconnect = reason !== DisconnectReason.loggedOut
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
-      console.log("❌ Koneksi putus. Reason:", reason)
-
-      if (shouldReconnect) {
-        retryCount++
-
-        let delay = 3000 * retryCount
-        if (delay > 15000) delay = 15000
-
-        console.log(`🔁 Reconnect ke-${retryCount} dalam ${delay / 1000} detik`)
-
-        setTimeout(() => {
-          startBot()
-        }, delay)
-      } else {
-        console.log("🚫 Session logout! Scan ulang QR")
-      }
+      if (shouldReconnect) startBot()
     }
   })
 
@@ -90,28 +72,28 @@ async function startBot() {
   })
 
   // =========================
-  // WELCOME MEMBER (FIX)
+  // UPDATE CACHE SAAT GROUP BERUBAH
   // =========================
   sock.ev.on("group-participants.update", async (anu) => {
+    delete groupCache[anu.id]
+
     try {
       if (anu.action === "add") {
         for (let user of anu.participants) {
-          if (fs.existsSync(__dirname + "/welcome.jpg")) {
+          if (fs.existsSync("./welcome.jpg")) {
             await sock.sendMessage(anu.id, {
-              image: fs.readFileSync(__dirname + "/welcome.jpg"),
-              caption: `👋 Selamat datang @${user.split("@")[0]} di group!\nSemoga betah ya ✨`,
+              image: fs.readFileSync("./welcome.jpg"),
+              caption: `👋 Selamat datang @${user.split("@")[0]}`,
               mentions: [user]
             })
           }
         }
       }
-    } catch (err) {
-      console.log("WELCOME ERROR:", err)
-    }
+    } catch {}
   })
 
   // =========================
-  // MESSAGE HANDLER
+  // MESSAGE HANDLER (ULTRA FAST)
   // =========================
   sock.ev.on("messages.upsert", async (m) => {
     try {
@@ -119,11 +101,10 @@ async function startBot() {
       if (!msg.message) return
 
       const from = msg.key.remoteJid
-      const isGroup = from.endsWith("@g.us")
-      const sender = msg.key.participant || from
+      if (!from.endsWith("@g.us")) return
 
-      // auto read
-      await sock.readMessages([msg.key])
+      // ⚡ AUTO READ TANPA NUNGGU
+      sock.readMessages([msg.key])
 
       const text =
         msg.message.conversation ||
@@ -134,76 +115,62 @@ async function startBot() {
       // QRIS
       // =========================
       if (text.toLowerCase() === ".qris") {
-        if (fs.existsSync(__dirname + "/qris.jpg")) {
+        if (fs.existsSync("./qris.jpg")) {
           await sock.sendMessage(from, {
-            image: fs.readFileSync(__dirname + "/qris.jpg"),
-            caption: "💸 Scan QRIS untuk pembayaran"
+            image: fs.readFileSync("./qris.jpg"),
+            caption: "💸 Scan QRIS"
           })
         }
         return
       }
 
-      if (!isGroup) return
+      const sender = msg.key.participant
 
       // =========================
-      // CEK ADMIN
+      // CEK ADMIN (CACHE)
       // =========================
       let isAdmin = false
+
       try {
-        const meta = await sock.groupMetadata(from)
-        isAdmin = meta.participants.some(
-          (p) => p.id === sender && p.admin !== null
-        )
+        if (!groupCache[from]) {
+          const meta = await sock.groupMetadata(from)
+          groupCache[from] = meta.participants
+        }
+
+        const admins = groupCache[from]
+          .filter(p => p.admin !== null)
+          .map(p => p.id)
+
+        isAdmin = admins.includes(sender)
       } catch {}
 
       if (isAdmin) return
 
       // =========================
-      // 🚫 LINK UNDANGAN WHATSAPP SAJA
+      // 🚫 LINK INVITE WA (FAST)
       // =========================
-      const isInvite =
-        /chat\.whatsapp\.com/i.test(text) ||
-        /whatsapp\.com\/invite/i.test(text)
-
-      if (isInvite) {
-        await sock.sendMessage(from, { delete: msg.key })
+      if (/chat\.whatsapp\.com/i.test(text)) {
+        sock.sendMessage(from, { delete: msg.key })
         return
       }
 
       // =========================
-      // 🚫 STATUS TAG GROUP SAJA
+      // 🚫 STATUS TAG GROUP
       // =========================
-      const isStatusGroupTag =
-        msg.message?.protocolMessage?.type === 25
-
-      if (isStatusGroupTag) {
-        await sock.sendMessage(from, { delete: msg.key })
+      if (msg.message?.protocolMessage?.type === 25) {
+        sock.sendMessage(from, { delete: msg.key })
         return
       }
 
-    } catch (err) {
-      console.log("ERROR:", err)
-    }
+    } catch {}
   })
 }
 
 // =========================
-// ANTI CRASH GLOBAL
+// ANTI CRASH
 // =========================
-process.on("uncaughtException", (err) => {
-  console.log("❌ ERROR:", err)
-})
-
-process.on("unhandledRejection", (err) => {
-  console.log("❌ PROMISE ERROR:", err)
-})
-
-// =========================
-// KEEP ALIVE LOG
-// =========================
-setInterval(() => {
-  console.log("🟢 Bot masih hidup:", new Date().toLocaleTimeString())
-}, 60000)
+process.on("uncaughtException", () => {})
+process.on("unhandledRejection", () => {})
 
 // =========================
 // RUN
