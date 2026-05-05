@@ -98,7 +98,7 @@ async function startBot() {
         for (let user of anu.participants) {
           if (fs.existsSync("./welcome.jpg")) {
             await sock.sendMessage(anu.id, {
-              image: fs.readFileSync("./welcome.jpg"),
+              image: fs.readFileSync(__dirname + "/welcome.jpg")
               caption: `👋 Selamat datang @${user.split("@")[0]} di group!\nSemoga betah ya ✨`,
               mentions: [user]
             })
@@ -136,7 +136,7 @@ async function startBot() {
       if (text.toLowerCase() === ".qris") {
         if (fs.existsSync("./qris.jpg")) {
           await sock.sendMessage(from, {
-            image: fs.readFileSync("./qris.jpg"),
+            image: fs.readFileSync(__dirname + "/qris.jpg"),
             caption: "💸 Scan QRIS untuk pembayaran"
           })
         }
