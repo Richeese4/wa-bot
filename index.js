@@ -10,57 +10,48 @@ const {
   fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys")
 
-// =========================
-// CONFIG
-// =========================
+const app = express()
+app.get("/", (req, res) => res.send("Bot aktif 🚀"))
+app.listen(3000, () => console.log("WEB ON"))
+
 const OWNER = "6282162625200"
 
 // =========================
-// HELPERS
+// DATABASE SIMPLE (JSON MEMORY)
 // =========================
-function clean(jid) {
-  return jid.split("@")[0]
-}
+let users = {} 
+let keys = {}  // { key: {used:false, exp, ownerMenu} }
 
-function now() {
-  return Date.now()
-}
-
+// =========================
+// GENERATE KEY
+// =========================
 function generateKey() {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  let key = ""
-  for (let i = 0; i < 10; i++) {
-    key += chars[Math.floor(Math.random() * chars.length)]
+  return "KEY-" + Math.random().toString(36).substring(2, 10).toUpperCase()
+}
+
+// =========================
+// MENU PER USER
+// =========================
+function getMenu(user) {
+  if (user === "6281111111111") {
+    return `📌 MENU A:
+.1 Joki
+.2 Rekber`
   }
-  return key
+
+  if (user === "6282222222222") {
+    return `📌 MENU B:
+.1 Mabar
+.2 Live`
+  }
+
+  return `📌 MENU DEFAULT:
+.1 Info
+.2 Support`
 }
 
 // =========================
-// DATABASE
-// =========================
-let db = {
-  users: {},
-  keys: {},
-  reseller: {}
-}
-
-if (fs.existsSync("./db.json")) {
-  db = JSON.parse(fs.readFileSync("./db.json"))
-}
-
-function saveDB() {
-  fs.writeFileSync("./db.json", JSON.stringify(db, null, 2))
-}
-
-// =========================
-// EXPRESS KEEP ALIVE
-// =========================
-const app = express()
-app.get("/", (req, res) => res.send("BOT AKTIF 🚀"))
-app.listen(3000)
-
-// =========================
-// START BOT
+// BOT START
 // =========================
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("session")
@@ -77,166 +68,129 @@ async function startBot() {
   // =========================
   // CONNECTION
   // =========================
-  sock.ev.on("connection.update", (u) => {
-    const { connection, qr, lastDisconnect } = u
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect, qr } = update
 
     if (qr) qrcode.generate(qr, { small: true })
+
     if (connection === "open") console.log("BOT READY")
 
     if (connection === "close") {
-      const reconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-
-      if (reconnect) startBot()
+      const statusCode = lastDisconnect?.error?.output?.statusCode
+      if (statusCode !== DisconnectReason.loggedOut) {
+        setTimeout(() => startBot(), 5000)
+      }
     }
   })
 
   // =========================
-  // MESSAGE HANDLER
+  // MESSAGE
   // =========================
   sock.ev.on("messages.upsert", async (m) => {
-    try {
-      const msg = m.messages[0]
-      if (!msg.message) return
+    const msg = m.messages[0]
+    if (!msg.message) return
 
-      const from = msg.key.remoteJid
-      const sender = msg.key.participant || from
-      const user = clean(sender)
+    const from = msg.key.remoteJid
+    const sender = (msg.key.participant || from).split("@")[0]
 
-      const text = (
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        ""
-      ).trim().toLowerCase()
+    const text = (
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text ||
+      ""
+    ).trim().toLowerCase()
 
-      await sock.readMessages([msg.key])
-
-      // =========================
-      // ROLE CHECK
-      // =========================
-      const isOwner = user === OWNER
-      const isReseller = db.reseller[user]
-      const isUser = db.users[user]
-      const isActive = isUser && isUser.expire > now()
-
-      // =========================
-      // BLOCK IF NOT LOGIN
-      // =========================
-      if (!isOwner && !isReseller && !isActive) {
-        if (text.startsWith(".")) {
-          return sock.sendMessage(from, {
-            text: `🔒 HARUS LOGIN
-
-.login nomor key
-
-Hubungi Owner:
-${OWNER}`
-          })
-        }
+    // =========================
+    // GENERATE KEY (OWNER ONLY)
+    // =========================
+    if (text.startsWith(".genkey")) {
+      if (sender !== OWNER) {
+        return sock.sendMessage(from, { text: "❌ Anda bukan owner / tidak punya akses" })
       }
 
-      // =========================
-      // GENERATE KEY (OWNER/RESELLER ONLY)
-      // =========================
-      if (text.startsWith(".genkey")) {
-        if (!isOwner && !isReseller) {
-          return sock.sendMessage(from, { text: "❌ No access" })
-        }
+      const args = text.split(" ")
+      const duration = args[1] || "24h"
 
-        const dur = parseInt(text.split(" ")[1]) || 24
-        const key = generateKey()
+      const key = generateKey()
 
-        db.keys[key] = {
-          used: false,
-          duration: dur * 3600000
-        }
+      const exp = Date.now() + 24 * 60 * 60 * 1000
 
-        saveDB()
+      keys[key] = {
+        used: false,
+        exp,
+        menu: "default"
+      }
 
-        return sock.sendMessage(from, {
-          text: `🔑 KEY GENERATED
+      return sock.sendMessage(from, {
+        text: `🔑 KEY GENERATED
 
 KEY: ${key}
-DURASI: ${dur} JAM`
-        })
+EXPIRED: 24 JAM
+METHOD: .login ${key}
+
+⚠️ 1x pakai`
+      })
+    }
+
+    // =========================
+    // LOGIN SYSTEM
+    // =========================
+    if (text.startsWith(".login")) {
+      const key = text.split(" ")[1]
+
+      if (!keys[key]) {
+        return sock.sendMessage(from, { text: "❌ Key tidak valid" })
       }
 
-      // =========================
-      // LOGIN SYSTEM
-      // =========================
-      if (text.startsWith(".login")) {
-        const [, nomor, key] = text.split(" ")
+      if (keys[key].used) {
+        return sock.sendMessage(from, { text: "❌ Key sudah dipakai" })
+      }
 
-        if (!db.keys[key]) {
-          return sock.sendMessage(from, { text: "❌ Key invalid" })
-        }
+      keys[key].used = true
 
-        if (db.keys[key].used) {
-          return sock.sendMessage(from, { text: "❌ Key sudah dipakai" })
-        }
+      users[sender] = {
+        logged: true,
+        exp: keys[key].exp,
+        menuType: keys[key].menu
+      }
 
-        db.users[nomor] = {
-          expire: now() + db.keys[key].duration,
-          menu: {
-            ".menu": "📌 MENU USER " + nomor,
-            ".1": "🔥 JOKI PRIVATE " + nomor,
-            ".2": "💰 REKBER PRIVATE " + nomor,
-            ".3": "💳 PAYMENT PRIVATE " + nomor
-          }
-        }
+      return sock.sendMessage(from, {
+        text: `✅ LOGIN BERHASIL
+Selamat datang ${sender}`
+      })
+    }
 
-        db.keys[key].used = true
-        saveDB()
+    // =========================
+    // CHECK LOGIN
+    // =========================
+    const user = users[sender]
 
+    if (!user || !user.logged) {
+      if (text === ".menu") {
         return sock.sendMessage(from, {
-          text: "✅ LOGIN BERHASIL"
+          text: "❌ Kamu belum login\nGunakan .login <key>\nHubungi owner untuk beli key"
         })
       }
+      return
+    }
 
-      // =========================
-      // GET USER
-      // =========================
-      const userData = db.users[user]
-      const active = userData && userData.expire > now()
+    // =========================
+    // EXPIRED CHECK
+    // =========================
+    if (Date.now() > user.exp) {
+      delete users[sender]
 
-      if (userData && userData.expire < now()) {
-        delete db.users[user]
-        saveDB()
+      return sock.sendMessage(from, {
+        text: "⏳ Login kamu sudah expired\nHubungi owner untuk perpanjangan"
+      })
+    }
 
-        return sock.sendMessage(from, {
-          text: "⛔ EXPIRED - HUBUNGI OWNER"
-        })
-      }
-
-      // =========================
-      // MENU SYSTEM PER USER
-      // =========================
-      if (text === ".menu" && active) {
-        return sock.sendMessage(from, {
-          text: userData.menu[".menu"]
-        })
-      }
-
-      if (text === ".1" && active) {
-        return sock.sendMessage(from, {
-          text: userData.menu[".1"]
-        })
-      }
-
-      if (text === ".2" && active) {
-        return sock.sendMessage(from, {
-          text: userData.menu[".2"]
-        })
-      }
-
-      if (text === ".3" && active) {
-        return sock.sendMessage(from, {
-          text: userData.menu[".3"]
-        })
-      }
-
-    } catch (e) {
-      console.log(e)
+    // =========================
+    // MENU USER
+    // =========================
+    if (text === ".menu") {
+      return sock.sendMessage(from, {
+        text: getMenu(sender)
+      })
     }
   })
 }
