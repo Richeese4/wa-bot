@@ -11,9 +11,16 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// OWNER (SUDAH DISET)
+// CONFIG OWNER
 // =========================
-const ownerNumber = "6282162625200@s.whatsapp.net"
+const owner = "6282162625200"
+
+// =========================
+// NORMALISASI JID
+// =========================
+function cleanJid(jid) {
+  return jid.split("@")[0]
+}
 
 // =========================
 // KEEP ALIVE
@@ -78,6 +85,7 @@ async function startBot() {
     if (connection === "close") {
       const reconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+
       if (reconnect) startBot()
     }
   })
@@ -102,9 +110,22 @@ async function startBot() {
       await sock.readMessages([msg.key])
 
       // =========================
-      // GENERATE KEY (OWNER ONLY)
+      // IDENTIFIKASI USER
       // =========================
-      if (text.startsWith(".genkey") && sender === ownerNumber) {
+      const senderNumber = cleanJid(sender)
+      const isOwner = senderNumber === owner
+      const isReseller = db.resellers[senderNumber] === true
+
+      // =========================
+      // GENERATE KEY (OWNER & RESELLER)
+      // =========================
+      if (text.startsWith(".genkey")) {
+        if (!isOwner && !isReseller) {
+          return sock.sendMessage(from, {
+            text: "❌ Khusus owner / reseller"
+          })
+        }
+
         const dur = text.split(" ")[1] || "24"
         const key = generateKey()
 
@@ -116,7 +137,7 @@ async function startBot() {
         saveDB()
 
         return sock.sendMessage(from, {
-          text: `🔑 KEY GENERATED
+          text: `🔑 KEY BERHASIL DIBUAT
 
 KEY: ${key}
 DURASI: ${dur} JAM`
@@ -124,40 +145,19 @@ DURASI: ${dur} JAM`
       }
 
       // =========================
-      // AUTO KIRIM KEY (SIMULASI PAYMENT)
+      // TAMBAH RESELLER (OWNER ONLY)
       // =========================
-      if (text.startsWith(".bayar") && sender === ownerNumber) {
+      if (text.startsWith(".addreseller")) {
+        if (!isOwner) return
+
         const nomor = text.split(" ")[1]
-        const dur = text.split(" ")[2] || "24"
+        if (!nomor) return
 
-        if (!nomor) {
-          return sock.sendMessage(from, {
-            text: "Format:\n.bayar 628xxx 24"
-          })
-        }
-
-        const jid = nomor + "@s.whatsapp.net"
-        const key = generateKey()
-
-        db.keys[key] = {
-          used: false,
-          duration: parseInt(dur) * 3600000
-        }
-
+        db.resellers[nomor] = true
         saveDB()
 
-        await sock.sendMessage(jid, {
-          text: `✅ PEMBAYARAN DITERIMA
-
-🔑 KEY KAMU:
-${key}
-
-Gunakan:
-.login ${nomor} ${key}`
-        })
-
         return sock.sendMessage(from, {
-          text: "✅ Key berhasil dikirim ke user"
+          text: `✅ Reseller ditambahkan: ${nomor}`
         })
       }
 
@@ -186,19 +186,14 @@ Gunakan:
         }
 
         db.users[jid] = {
-          expired: Date.now() + db.keys[key].duration,
-          menu: `📌 MENU USER
-
-.1 Joki
-.2 Rekber
-.3 Payment`
+          expired: Date.now() + db.keys[key].duration
         }
 
         db.keys[key].used = true
         saveDB()
 
         return sock.sendMessage(from, {
-          text: "✅ Login sukses! ketik .menu"
+          text: "✅ LOGIN BERHASIL\nKetik .menu"
         })
       }
 
@@ -208,7 +203,7 @@ Gunakan:
       if (!db.users[sender]) {
         if (text.startsWith(".")) {
           return sock.sendMessage(from, {
-            text: `🔒 BELUM LOGIN
+            text: `🔒 HARUS LOGIN
 
 Hubungi owner:
 082162625200`
@@ -234,7 +229,11 @@ Hubungi owner:
       // =========================
       if (text === ".menu") {
         return sock.sendMessage(from, {
-          text: db.users[sender].menu
+          text: `📌 MENU USER
+
+.1 Joki
+.2 Rekber
+.3 Payment`
         })
       }
 
@@ -243,7 +242,7 @@ Hubungi owner:
       // =========================
       if (text === ".1") {
         return sock.sendMessage(from, {
-          text: "📌 JOKI LIST USER"
+          text: "📌 LIST JOKI USER"
         })
       }
 
@@ -252,7 +251,7 @@ Hubungi owner:
       // =========================
       if (text === ".2") {
         return sock.sendMessage(from, {
-          text: "📌 REKBER LIST USER"
+          text: "📌 LIST REKBER USER"
         })
       }
 
@@ -261,7 +260,7 @@ Hubungi owner:
       // =========================
       if (text === ".3") {
         return sock.sendMessage(from, {
-          text: "📌 PAYMENT INFO USER"
+          text: "📌 PAYMENT USER"
         })
       }
 
