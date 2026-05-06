@@ -11,26 +11,23 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// CONFIG OWNER
+// CONFIG
 // =========================
-const owner = "6282162625200"
+const OWNER = "6282162625200"
 
 // =========================
-// NORMALIZE JID
+// HELPERS
 // =========================
 function cleanJid(jid) {
   return jid.split("@")[0]
 }
 
-// =========================
-// KEEP ALIVE
-// =========================
-const app = express()
-app.get("/", (req, res) => res.send("Bot aktif 🚀"))
-app.listen(3000, () => console.log("🌐 Web aktif"))
+function now() {
+  return Date.now()
+}
 
 // =========================
-// DATABASE SIMPLE
+// DB
 // =========================
 let db = {
   users: {},
@@ -47,16 +44,23 @@ function saveDB() {
 }
 
 // =========================
-// GENERATE KEY
+// KEY GENERATOR
 // =========================
-function generateKey(len = 8) {
+function generateKey() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  let key = ""
-  for (let i = 0; i < len; i++) {
-    key += chars[Math.floor(Math.random() * chars.length)]
+  let k = ""
+  for (let i = 0; i < 10; i++) {
+    k += chars[Math.floor(Math.random() * chars.length)]
   }
-  return key
+  return k
 }
+
+// =========================
+// KEEP ALIVE
+// =========================
+const app = express()
+app.get("/", (req, res) => res.send("BOT PREMIUM AKTIF 🚀"))
+app.listen(3000)
 
 // =========================
 // START BOT
@@ -76,11 +80,11 @@ async function startBot() {
   // =========================
   // CONNECTION
   // =========================
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr } = update
+  sock.ev.on("connection.update", (u) => {
+    const { connection, qr, lastDisconnect } = u
 
     if (qr) qrcode.generate(qr, { small: true })
-    if (connection === "open") console.log("BOT AKTIF")
+    if (connection === "open") console.log("BOT PREMIUM AKTIF")
 
     if (connection === "close") {
       const reconnect =
@@ -100,6 +104,7 @@ async function startBot() {
 
       const from = msg.key.remoteJid
       const sender = msg.key.participant || from
+      const user = cleanJid(sender)
 
       const text = (
         msg.message?.conversation ||
@@ -110,56 +115,52 @@ async function startBot() {
       await sock.readMessages([msg.key])
 
       // =========================
-      // NORMAL USER INFO
+      // STATUS USER
       // =========================
-      const senderNumber = cleanJid(sender)
-
-      const isOwner = senderNumber === owner
-      const isReseller = db.resellers?.[senderNumber]
-      const isLoggedIn = !!db.users[senderNumber]
+      const isOwner = user === OWNER
+      const isReseller = db.resellers[user]
+      const isPremium = db.users[user] && db.users[user].expire > now()
 
       // =========================
-      // GENKEY (OWNER + RESELLER)
+      // BLOCK IF NOT LOGIN
       // =========================
-      if (text.startsWith(".genkey")) {
-        if (!isOwner && !isReseller) {
+      if (!isOwner && !isReseller && !isPremium) {
+        if (text.startsWith(".")) {
           return sock.sendMessage(from, {
-            text: "❌ Khusus owner / reseller"
+            text: `🔒 AKSES DITOLAK
+
+Silakan login dulu:
+.login NOMOR KEY
+
+Hubungi Owner:
+${OWNER}`
           })
         }
-
-        const dur = text.split(" ")[1] || "24"
-        const key = generateKey()
-
-        db.keys[key] = {
-          used: false,
-          duration: parseInt(dur) * 3600000
-        }
-
-        saveDB()
-
-        return sock.sendMessage(from, {
-          text: `🔑 KEY BERHASIL DIGENERATE
-
-KEY: ${key}
-DURASI: ${dur} JAM`
-        })
       }
 
       // =========================
-      // ADD RESELLER (OWNER ONLY)
+      // GENERATE KEY (OWNER/RESELLER)
       // =========================
-      if (text.startsWith(".addreseller")) {
-        if (!isOwner) return
+      if (text.startsWith(".genkey")) {
+        if (!isOwner && !isReseller) {
+          return sock.sendMessage(from, { text: "❌ Khusus reseller/owner" })
+        }
 
-        const nomor = text.split(" ")[1]
-        if (!nomor) return
+        const jam = parseInt(text.split(" ")[1]) || 24
+        const key = generateKey()
 
-        db.resellers[nomor] = true
+        db.keys[key] = {
+          duration: jam * 3600000,
+          used: false
+        }
+
         saveDB()
 
         return sock.sendMessage(from, {
-          text: `✅ Reseller ditambahkan: ${nomor}`
+          text: `🔑 KEY PREMIUM
+
+KEY: ${key}
+DURASI: ${jam} JAM`
         })
       }
 
@@ -167,116 +168,135 @@ DURASI: ${dur} JAM`
       // LOGIN SYSTEM
       // =========================
       if (text.startsWith(".login")) {
-        const args = text.split(" ")
-        const nomor = args[1]
-        const key = args[2]
-
-        if (!nomor || !key) {
-          return sock.sendMessage(from, {
-            text: "Format:\n.login 628xxx KEY"
-          })
-        }
+        const [, nomor, key] = text.split(" ")
 
         if (!db.keys[key]) {
-          return sock.sendMessage(from, {
-            text: "❌ Key salah"
-          })
+          return sock.sendMessage(from, { text: "❌ Key salah" })
         }
 
         if (db.keys[key].used) {
-          return sock.sendMessage(from, {
-            text: "❌ Key sudah dipakai"
-          })
+          return sock.sendMessage(from, { text: "❌ Key sudah dipakai" })
         }
 
         db.users[nomor] = {
-          expired: Date.now() + db.keys[key].duration
+          expire: now() + db.keys[key].duration
         }
 
         db.keys[key].used = true
         saveDB()
 
         return sock.sendMessage(from, {
-          text: "✅ LOGIN BERHASIL\nKetik .menu"
+          text: "✅ LOGIN BERHASIL (PREMIUM AKTIF)"
         })
-      }
-
-      // =========================
-      // 🔥 FIX LOGIN FILTER (INI PENTING)
-      // =========================
-      if (!isOwner && !isReseller && !isLoggedIn) {
-        if (text.startsWith(".")) {
-          return sock.sendMessage(from, {
-            text: `🔒 HARUS LOGIN
-
-Hubungi owner:
-082162625200`
-          })
-        }
-        return
       }
 
       // =========================
       // EXPIRED CHECK
       // =========================
-      if (!isOwner && !isReseller && isLoggedIn) {
-        if (Date.now() > db.users[senderNumber].expired) {
-          delete db.users[senderNumber]
-          saveDB()
+      if (isPremium && db.users[user].expire < now()) {
+        delete db.users[user]
+        saveDB()
 
+        return sock.sendMessage(from, {
+          text: `⛔ PREMIUM HABIS
+
+Silakan perpanjang ke Owner:
+${OWNER}`
+        })
+      }
+
+      // =========================
+      // MENU PREMIUM PERSONAL
+      // =========================
+      if (text === ".menu") {
+        if (isOwner) {
           return sock.sendMessage(from, {
-            text: "⛔ AKSES HABIS\nHubungi owner: 082162625200"
+            text: `👑 OWNER MENU
+
+.genkey 24
+.addreseller nomor
+.stats`
+          })
+        }
+
+        if (isReseller) {
+          return sock.sendMessage(from, {
+            text: `💼 RESELLER MENU
+
+.genkey 24
+.cekuser
+.topup`
+          })
+        }
+
+        if (isPremium) {
+          return sock.sendMessage(from, {
+            text: `✨ PREMIUM MENU
+
+.1 Joki Services
+.2 Rekber System
+.3 Payment
+.4 VIP Tools
+.5 Private Feature`
           })
         }
       }
 
       // =========================
-      // MENU
+      // PREMIUM MENU LIST
       // =========================
-      if (text === ".menu") {
+      if (text === ".1" && isPremium) {
         return sock.sendMessage(from, {
-          text: `📌 MENU USER
+          text: `🔥 PREMIUM JOKI LIST
 
-.1 Joki
-.2 Rekber
-.3 Payment`
+- Fast Leveling
+- Full Mastery
+- Raid Auto
+- Race Unlock
+- Sword Unlock
+- Farming Bot`
         })
       }
 
-      // =========================
-      // MENU 1
-      // =========================
-      if (text === ".1") {
+      if (text === ".2" && isPremium) {
         return sock.sendMessage(from, {
-          text: "📌 LIST JOKI USER"
+          text: `💰 REKBER PREMIUM
+
+Fee lebih murah & prioritas transaksi`
         })
       }
 
-      // =========================
-      // MENU 2
-      // =========================
-      if (text === ".2") {
+      if (text === ".3" && isPremium) {
         return sock.sendMessage(from, {
-          text: "📌 LIST REKBER USER"
+          text: `💳 PAYMENT VIP
+
+QRIS / DANA / GOPAY / BANK`
         })
       }
 
-      // =========================
-      // MENU 3
-      // =========================
-      if (text === ".3") {
+      if (text === ".4" && isPremium) {
         return sock.sendMessage(from, {
-          text: "📌 PAYMENT USER"
+          text: `⚡ VIP TOOLS
+
+- Auto Farm
+- Auto Quest
+- Anti AFK
+- Speed Boost`
         })
       }
 
-    } catch (err) {
-      console.log(err)
+      if (text === ".5" && isPremium) {
+        return sock.sendMessage(from, {
+          text: `🔒 PRIVATE FEATURES
+
+Hanya user premium aktif`
+        })
+      }
+
+    } catch (e) {
+      console.log(e)
     }
   })
 }
 
-// =========================
-// RUN
-// =========================
 startBot()
