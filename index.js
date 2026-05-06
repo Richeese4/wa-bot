@@ -12,11 +12,10 @@ const {
   fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys")
 
-// MIDTRANS (PAKAI FILE TERPISAH)
 const snap = require("./midtrans")
 
 // =========================
-// DATABASE (ANTI CRASH)
+// DATABASE
 // =========================
 const dbFile = "./db.json"
 
@@ -97,7 +96,7 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // CONNECTION (ANTI DC PRO)
+  // CONNECTION
   // =========================
   let retry = 0
 
@@ -121,7 +120,6 @@ async function startBot() {
       if (shouldReconnect) {
         retry++
         const delay = Math.min(3000 * retry, 15000)
-
         console.log(`🔁 Reconnect dalam ${delay}ms`)
         setTimeout(startBot, delay)
       } else {
@@ -142,7 +140,7 @@ async function startBot() {
   })
 
   // =========================
-  // WELCOME MEMBER
+  // WELCOME
   // =========================
   sock.ev.on("group-participants.update", async (anu) => {
     try {
@@ -176,10 +174,33 @@ async function startBot() {
 
       await sock.readMessages([msg.key])
 
+      const message = msg.message
       const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
+        message.conversation ||
+        message.extendedTextMessage?.text ||
+        message.imageMessage?.caption ||
+        message.videoMessage?.caption ||
         ""
+
+      // =========================
+      // CEK ADMIN
+      // =========================
+      let isAdmin = false
+      let isBotAdmin = false
+
+      if (isGroup) {
+        try {
+          const meta = await sock.groupMetadata(from)
+
+          isAdmin = meta.participants.some(
+            (p) => p.id === sender && p.admin !== null
+          )
+
+          isBotAdmin = meta.participants.some(
+            (p) => p.id === sock.user.id && p.admin !== null
+          )
+        } catch {}
+      }
 
       // =========================
       // QRIS
@@ -188,7 +209,7 @@ async function startBot() {
         if (fs.existsSync(__dirname + "/qris.jpg")) {
           await sock.sendMessage(from, {
             image: fs.readFileSync(__dirname + "/qris.jpg"),
-            caption: "💸 Scan QRIS"
+            caption: "💸 *SCAN QRIS UNTUK PEMBAYARAN*"
           })
         }
         return
@@ -202,7 +223,10 @@ async function startBot() {
 
         if (!nomor || !harga) {
           return sock.sendMessage(from, {
-            text: "Format:\n.rekber 628xxx 10000"
+            text: `❌ Format salah!
+
+Contoh:
+.rekber 628xxx 10000`
           })
         }
 
@@ -231,14 +255,23 @@ async function startBot() {
         saveDB(db)
 
         await sock.sendMessage(from, {
-          text: `💳 PEMBAYARAN
+          text: `🛒 *TRANSAKSI REKBER*
 
-ID: ${orderId}
-Total: ${total}
+📦 ID: ${orderId}
+💰 Harga: ${harga}
+💸 Fee: ${fee}
+🧾 Total: ${total}
 
-Bayar:
-${trx.redirect_url}`
+⚠️ *INSTRUKSI:*
+Silakan bayar sesuai nominal:
+
+👉 ${trx.redirect_url}
+
+✅ Setelah bayar:
+- Penjual akan diberitahu
+- Barang bisa dikirim`
         })
+        return
       }
 
       // =========================
@@ -253,7 +286,9 @@ ${trx.redirect_url}`
         if (order.buyer !== sender) return
 
         if (order.status !== "PAID") {
-          return sock.sendMessage(from, { text: "❌ Belum dibayar" })
+          return sock.sendMessage(from, {
+            text: "❌ Belum dibayar"
+          })
         }
 
         order.status = "DONE"
@@ -269,6 +304,7 @@ ${trx.redirect_url}`
         await sock.sendMessage(from, {
           text: "✅ Dana dikirim ke seller"
         })
+        return
       }
 
       // =========================
@@ -281,6 +317,7 @@ ${trx.redirect_url}`
         await sock.sendMessage(from, {
           text: `💰 Saldo: ${user.balance}`
         })
+        return
       }
 
       // =========================
@@ -311,28 +348,26 @@ ${trx.redirect_url}`
         await sock.sendMessage(from, {
           text: "📤 Withdraw diproses"
         })
+        return
       }
 
       // =========================
-      // FILTER GRUP
+      // ANTI LINK
       // =========================
       if (isGroup) {
-        let isAdmin = false
-        try {
-          const meta = await sock.groupMetadata(from)
-          isAdmin = meta.participants.some(
-            (p) => p.id === sender && p.admin !== null
-          )
-        } catch {}
+        const isInvite =
+          /chat\.whatsapp\.com/i.test(text) ||
+          /whatsapp\.com\/invite/i.test(text)
 
-        if (!isAdmin) {
-          const isInvite =
-            /chat\.whatsapp\.com/i.test(text) ||
-            /whatsapp\.com\/invite/i.test(text)
+        if (isInvite) {
+          if (!isBotAdmin) {
+            return sock.sendMessage(from, {
+              text: "⚠️ Jadikan bot admin untuk menghapus link!"
+            })
+          }
 
-          if (isInvite) {
+          if (!isAdmin) {
             await sock.sendMessage(from, { delete: msg.key })
-            return
           }
         }
       }
@@ -344,13 +379,13 @@ ${trx.redirect_url}`
 }
 
 // =========================
-// GLOBAL ANTI CRASH
+// ANTI CRASH
 // =========================
 process.on("uncaughtException", console.log)
 process.on("unhandledRejection", console.log)
 
 // =========================
-// KEEP ALIVE LOG
+// KEEP ALIVE
 // =========================
 setInterval(() => {
   console.log("🟢 Bot hidup:", new Date().toLocaleTimeString())
