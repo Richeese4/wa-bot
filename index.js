@@ -97,10 +97,17 @@ async function startBot() {
       const isGroup = from.endsWith("@g.us")
       const sender = msg.key.participant || from
 
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
+      // 🔥 FIX BESAR DI SINI (WAJIB)
+      const text = (
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        msg.message?.videoMessage?.caption ||
         ""
+      ).trim().toLowerCase()
+
+      // DEBUG (hapus nanti kalau sudah normal)
+      console.log("📩 TEXT:", text)
 
       await sock.readMessages([msg.key])
 
@@ -108,8 +115,10 @@ async function startBot() {
       // MENU
       // =========================
       if (text === ".menu") {
+        const username = sender.split("@")[0]
+
         await sock.sendMessage(from, {
-          text: `👋 Hallo Kak @${sender.split("@")[0]}
+          text: `👋 Hallo Kak @${username}
 
 Ada yang bisa aku bantu?
 
@@ -150,8 +159,6 @@ Joki Sword
 Joki Fighting Style
 -God Human (20k)
 -Dragon Talon (14k)
-
-Dan masih banyak lagi...
 
 📩 Minat? Chat admin!`
         })
