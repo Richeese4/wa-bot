@@ -27,7 +27,8 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     logger: P({ level: "silent" }),
-    auth: state
+    auth: state,
+    keepAliveIntervalMs: 30000
   })
 
   sock.ev.on("creds.update", saveCreds)
@@ -38,7 +39,7 @@ async function startBot() {
   const menuSession = {}
 
   // =========================
-  // CONNECTION
+  // CONNECTION (ANTI TIMEOUT)
   // =========================
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
@@ -53,10 +54,16 @@ async function startBot() {
     }
 
     if (connection === "close") {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+      const reason = lastDisconnect?.error?.output?.statusCode
 
-      if (shouldReconnect) startBot()
+      console.log("❌ Disconnect:", reason)
+
+      // reconnect semua kecuali logout
+      if (reason !== DisconnectReason.loggedOut) {
+        setTimeout(() => startBot(), 5000)
+      } else {
+        console.log("⚠️ Scan ulang QR!")
+      }
     }
   })
 
@@ -80,6 +87,19 @@ async function startBot() {
       await sock.readMessages([msg.key])
 
       // =========================
+      // QRIS (GLOBAL - SELALU BISA)
+      // =========================
+      if (text === ".qris") {
+        if (fs.existsSync("./qris.jpg")) {
+          await sock.sendMessage(from, {
+            image: fs.readFileSync("./qris.jpg"),
+            caption: "💸 Scan QRIS"
+          })
+        }
+        return
+      }
+
+      // =========================
       // MENU
       // =========================
       if (text === ".menu") {
@@ -99,6 +119,7 @@ async function startBot() {
 
         await sock.sendMessage(from, {
           text: `👋 Hallo Kak @${username}
+
 Ada yang bisa aku bantu😊?
 
 📌 *PILIH MENU*
@@ -106,19 +127,19 @@ Ada yang bisa aku bantu😊?
 .2 Rekber / Midman
 .3 Payment
 
-⏳ Menu aktif 30 detik`,
+⏳ Berlaku 30 detik`,
           mentions: [sender]
         })
         return
       }
 
       // =========================
-      // FILTER: HANYA PROSES COMMAND TITIK
+      // HANYA PROSES COMMAND TITIK
       // =========================
       if (!text.startsWith(".")) return
 
       // =========================
-      // MENU HARUS AKTIF
+      // CEK SESSION
       // =========================
       if (!menuSession[sender]) return
 
@@ -137,114 +158,8 @@ Joki Level
 -100 level = 3k (sea 2) 
 -100 level = 4k (sea 1) 
 -500 level =10k (sea 3) 
--1k level   =18k (sea 3) 
+-1k level =18k (sea 3)
 
-JOKI MASTERY
--100 mastery (3k) (sea 3&2) 
--100 mastery (4k) (sea 1) 
--500 mastery (12k) (sea 3&2)
-
-Joki Sword
-
--CDK (20k) 
--Dragon heart (20k) 
--shark anchor (15k) 
--yama (10k)
--tushita (12k)
--rengoku (5k)
--saber (3k) 
--spikey trident (10k)
--dragon trident (6k) 
--gravity sword (5k) 
--pole v1 (7k) 
--pole v2 (10k) 
--shizu (10k) 
--saishi (10k) 
--oroshi (10k) 
-
-JOKI FIGHTING STYLE
--Sanguine Art (30K)
--God Human (20k) (semua fs masterynya udah cukup) 
--God Human (25k) (belum cukup mastery semua fs) 
--Super Human (10k) (udah full mastery semua fs) 
--Super Human (15k) (belum full mastery semua fs) 
--Dragon Talon (14k) 
--Sharkman Karate (12k) 
--Death Step (12k) 
--Eletric Claw (12k) 
-
-Joki Raid dan Fragment
-
--raid normal (2k)
--raid advanced (4k)
--1k frag (1k)
--5k frag (4k)
--dough king (15k)
--rip indra (15k)
-
-Joki race
-
--Get Ghoul (15k)
--Get Draco (20k) belum termasuk belt
--Get Cyborg(20k) harus siap kan fragman
-
-Joki Aksesoris
-
--Pale Scraf (8k)
--Mahkota Suci (5k)
--Pilot helmet (10k)
--hunter cape (7k) /bebas warna apa aja
--bandana (7k) /bebas warna apa aja
--DarkCoat (70K)
-
-Joki Belly / Uang
-
--500k belly (4k)
--1jt belly  (7k) 
-
-Joki V Race
-
--Race
-V2:Shark,Human,Mink,Angel,ghoul (3k) 
-V3:Shark,Human,Mink,Angel (5k) 
-V3:Ghoul (10k) 
-V2:Draco (10k)
-V3:Draco (15k) 
-
-Joki Gun
-
--Skull guitar (12k) kalo udah lengkap material
--Skull guitar (15k) kalo belum ada material
--Dragon Storm (25k) 
--Venom bow (8k) 
--Acidum riffle (5k)
-
-Joki Quest
--All belt (25k)
-(bisa req belt apa aja) 
--Rainbow Haki (10k)
--Legendary Haki (15K)
--Citizen Quest (10k)
--bartilo (5k)
--Spawn rip_indra (6k)
-
-
-JOKI V4 RECE
-1 GEAR (5K)
-2 GEAR (10K)
-3 GEAR (15K)
-FULL GEAR (25K)
-
-Joki Crafting
-Beast Hunter (60K)
-Leviathan Shield (80K)
-Leviathan Crown (30K)
-Shark Anchor (10K) Have Magnet
-Shark Anchor (15K) No Magnet
-DragonStorm (15K)
-DragonHeart (20K)
-
-Terpercayaa Amanah 100%
 📩 Minat? Chat Worker Kami!`
         })
         return
@@ -258,19 +173,13 @@ Terpercayaa Amanah 100%
         delete menuSession[sender]
 
         await sock.sendMessage(from, {
-          text: `📌 *LIST FEE REKBER BY ZNOIDFAMZ*
+          text: `📌 *LIST FEE REKBER*
 
 1.000 - 20.000 = 2.000
 21.000 - 99.000 = 3.000
 100.000 - 299.000 = 5.000
-300.000 - 499.000 = 7.000
-500.000 - 999.000 = 10.000
-1.000.000 - 1.499.000 = 15.000
-1.500.000 - 1.900.000 = 20.000
-2.000.000 - Seterusnya = 25.000
 
-📩 Lanjut transaksi?
-Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
+📩 Ketik *.qris* untuk bayar`
         })
         return
       }
@@ -283,28 +192,13 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
         delete menuSession[sender]
 
         await sock.sendMessage(from, {
-          text: `💳 *PAYMENT/PEMBAYARAN*
+          text: `💳 *PAYMENT*
 
-1. QRIS AllPayment A/N ZnoidFamz (ketik .qris)
-2. DANA: 081290783833 A/N HA*** PRA***
-3. GOPAY: 081290783833 A/N HA*** PRA***
-4. BCA: 3780620578 A/N HA*** PRA***
-
-⚠️ PASTIKAN CEK KEMBALI SEBELUM MELAKUKAN TRANSAKSI/PENGIRIMAN. SALAH KIRIM BUKAN TANGGUNG JAWAB ADMIN`
+1. QRIS (.qris)
+2. DANA
+3. GOPAY
+4. BCA`
         })
-        return
-      }
-
-      // =========================
-      // QRIS
-      // =========================
-      if (text === ".qris") {
-        if (fs.existsSync("./qris.jpg")) {
-          await sock.sendMessage(from, {
-            image: fs.readFileSync("./qris.jpg"),
-            caption: "💸 Scan QRIS"
-          })
-        }
         return
       }
 
@@ -313,6 +207,17 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
     }
   })
 }
+
+// =========================
+// ANTI CRASH GLOBAL
+// =========================
+process.on("uncaughtException", (err) => {
+  console.log("❌ ERROR:", err)
+})
+
+process.on("unhandledRejection", (err) => {
+  console.log("❌ PROMISE ERROR:", err)
+})
 
 // =========================
 // RUN
