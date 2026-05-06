@@ -11,9 +11,9 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// CONFIG OWNER
+// OWNER CONFIG (NAME LOGIN)
 // =========================
-const OWNER_NUMBER = "6282162625200"
+const OWNER_NAME = "Pedro"
 const OWNER_KEY = "freewilly123"
 
 // =========================
@@ -22,12 +22,15 @@ const OWNER_KEY = "freewilly123"
 const users = {}
 const keys = {}
 
+// contoh menu per user
+const userMenus = {}
+
 // =========================
 // EXPRESS
 // =========================
 const app = express()
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
-app.listen(3000, () => console.log("WEB ON"))
+app.listen(3000)
 
 // =========================
 // START BOT
@@ -44,6 +47,10 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds)
 
+  const getNum = (jid) => jid.split("@")[0]
+
+  const isLoggedIn = (id) => users[id]?.loggedIn
+
   // =========================
   // CONNECTION
   // =========================
@@ -57,24 +64,15 @@ async function startBot() {
     }
 
     if (connection === "close") {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-
-      if (shouldReconnect) startBot()
+      const code = lastDisconnect?.error?.output?.statusCode
+      if (code !== DisconnectReason.loggedOut) {
+        setTimeout(() => startBot(), 5000)
+      }
     }
   })
 
   // =========================
-  // HELPERS FIX OWNER DETECT
-  // =========================
-  const getNumber = (jid) => jid.split("@")[0]
-
-  const isOwner = (sender) => getNumber(sender) === OWNER_NUMBER
-
-  const isLoggedIn = (sender) => users[sender]?.loggedIn
-
-  // =========================
-  // MESSAGE
+  // LOGIN SYSTEM
   // =========================
   sock.ev.on("messages.upsert", async (m) => {
     const msg = m.messages[0]
@@ -82,6 +80,7 @@ async function startBot() {
 
     const from = msg.key.remoteJid
     const sender = msg.key.participant || from
+    const jid = getNum(sender)
 
     const text = (
       msg.message?.conversation ||
@@ -90,27 +89,35 @@ async function startBot() {
     ).trim().toLowerCase()
 
     // =========================
-    // LOGIN SYSTEM
+    // OWNER LOGIN (NAME + KEY)
     // =========================
     if (text.startsWith(".login")) {
-      const key = text.split(" ")[1]
+      const [, name, key] = text.split(" ")
 
-      // ================= OWNER LOGIN =================
-      if (isOwner(sender) && key === OWNER_KEY) {
-        users[sender] = {
+      if (name === OWNER_NAME && key === OWNER_KEY) {
+        users[jid] = {
           loggedIn: true,
           role: "owner"
         }
 
+        // menu khusus owner
+        userMenus[jid] = [
+          ".genkey",
+          ".listuser",
+          ".menu owner panel"
+        ]
+
         return sock.sendMessage(from, {
-          text: "✅ OWNER LOGIN BERHASIL"
+          text: "👑 OWNER LOGIN BERHASIL"
         })
       }
 
-      // ================= USER LOGIN =================
+      // =========================
+      // USER LOGIN (NUMBER + KEY)
+      // =========================
       if (!keys[key]) {
         return sock.sendMessage(from, {
-          text: "❌ Key tidak valid"
+          text: "❌ Key salah"
         })
       }
 
@@ -120,7 +127,7 @@ async function startBot() {
         })
       }
 
-      users[sender] = {
+      users[jid] = {
         loggedIn: true,
         role: "user",
         key
@@ -128,79 +135,68 @@ async function startBot() {
 
       keys[key].used = true
 
+      // menu user random / bisa kamu custom per user
+      userMenus[jid] = [
+        ".1 joki",
+        ".2 rekber",
+        ".3 payment"
+      ]
+
       return sock.sendMessage(from, {
-        text: "✅ Login berhasil (24 jam)"
+        text: "✅ LOGIN BERHASIL"
       })
     }
 
     // =========================
     // BLOCK IF NOT LOGIN
     // =========================
-    if (!isLoggedIn(sender)) {
+    if (!isLoggedIn(jid)) {
       if (text === ".menu") {
         return sock.sendMessage(from, {
-          text: "❌ Kamu belum login\nGunakan .login <key>"
+          text: "❌ Harus login dulu\nGunakan .login <number/key> atau .login Pedro freewilly123"
         })
       }
       return
     }
 
     // =========================
-    // OWNER MENU
-    // =========================
-    if (text === ".menu" && isOwner(sender)) {
-      return sock.sendMessage(from, {
-        text:
-`👑 OWNER MENU
-
-.genkey <jam>
-.listkey`
-      })
-    }
-
-    // =========================
-    // USER MENU
+    // MENU PERSONAL USER
     // =========================
     if (text === ".menu") {
+      const menu = userMenus[jid] || ["menu kosong"]
+
       return sock.sendMessage(from, {
         text:
-`📌 USER MENU
+`📌 MENU ANDA:
 
-.1 Joki
-.2 Rekber
-.3 Payment`
+${menu.join("\n")}`
       })
     }
 
     // =========================
-    // GENERATE KEY (OWNER ONLY FIXED)
+    // OWNER GENERATE KEY
     // =========================
     if (text.startsWith(".genkey")) {
-      if (!isOwner(sender)) {
+      if (users[jid]?.role !== "owner") {
         return sock.sendMessage(from, {
-          text: "❌ Hanya owner bisa generate key"
+          text: "❌ hanya owner bisa generate key"
         })
       }
 
-      const hours = parseInt(text.split(" ")[1]) || 24
       const key = Math.random().toString(36).substring(2, 10)
 
       keys[key] = {
         used: false,
-        expired: Date.now() + hours * 3600000
+        expired: Date.now() + 24 * 60 * 60 * 1000
       }
 
       return sock.sendMessage(from, {
-        text:
-`🔑 KEY GENERATED
-
-KEY: ${key}
-DURASI: ${hours} JAM`
+        text: `🔑 KEY: ${key}`
       })
     }
 
     // =========================
-    // AUTO EXPIRED CLEANER
+    // EXPIRED CLEANER
     // =========================
     for (let k in keys) {
       if (keys[k].expired && Date.now() > keys[k].expired) {
