@@ -16,7 +16,7 @@ const {
 const owner = "6282162625200"
 
 // =========================
-// NORMALISASI JID
+// NORMALIZE JID
 // =========================
 function cleanJid(jid) {
   return jid.split("@")[0]
@@ -30,7 +30,7 @@ app.get("/", (req, res) => res.send("Bot aktif 🚀"))
 app.listen(3000, () => console.log("🌐 Web aktif"))
 
 // =========================
-// DATABASE
+// DATABASE SIMPLE
 // =========================
 let db = {
   users: {},
@@ -110,14 +110,16 @@ async function startBot() {
       await sock.readMessages([msg.key])
 
       // =========================
-      // IDENTIFIKASI USER
+      // NORMAL USER INFO
       // =========================
       const senderNumber = cleanJid(sender)
+
       const isOwner = senderNumber === owner
-      const isReseller = db.resellers[senderNumber] === true
+      const isReseller = db.resellers?.[senderNumber]
+      const isLoggedIn = !!db.users[senderNumber]
 
       // =========================
-      // GENERATE KEY (OWNER & RESELLER)
+      // GENKEY (OWNER + RESELLER)
       // =========================
       if (text.startsWith(".genkey")) {
         if (!isOwner && !isReseller) {
@@ -137,7 +139,7 @@ async function startBot() {
         saveDB()
 
         return sock.sendMessage(from, {
-          text: `🔑 KEY BERHASIL DIBUAT
+          text: `🔑 KEY BERHASIL DIGENERATE
 
 KEY: ${key}
 DURASI: ${dur} JAM`
@@ -145,7 +147,7 @@ DURASI: ${dur} JAM`
       }
 
       // =========================
-      // TAMBAH RESELLER (OWNER ONLY)
+      // ADD RESELLER (OWNER ONLY)
       // =========================
       if (text.startsWith(".addreseller")) {
         if (!isOwner) return
@@ -175,17 +177,19 @@ DURASI: ${dur} JAM`
           })
         }
 
-        const jid = nomor + "@s.whatsapp.net"
-
         if (!db.keys[key]) {
-          return sock.sendMessage(from, { text: "❌ Key salah" })
+          return sock.sendMessage(from, {
+            text: "❌ Key salah"
+          })
         }
 
         if (db.keys[key].used) {
-          return sock.sendMessage(from, { text: "❌ Key sudah dipakai" })
+          return sock.sendMessage(from, {
+            text: "❌ Key sudah dipakai"
+          })
         }
 
-        db.users[jid] = {
+        db.users[nomor] = {
           expired: Date.now() + db.keys[key].duration
         }
 
@@ -198,9 +202,9 @@ DURASI: ${dur} JAM`
       }
 
       // =========================
-      // CEK LOGIN
+      // 🔥 FIX LOGIN FILTER (INI PENTING)
       // =========================
-      if (!db.users[sender]) {
+      if (!isOwner && !isReseller && !isLoggedIn) {
         if (text.startsWith(".")) {
           return sock.sendMessage(from, {
             text: `🔒 HARUS LOGIN
@@ -215,13 +219,15 @@ Hubungi owner:
       // =========================
       // EXPIRED CHECK
       // =========================
-      if (Date.now() > db.users[sender].expired) {
-        delete db.users[sender]
-        saveDB()
+      if (!isOwner && !isReseller && isLoggedIn) {
+        if (Date.now() > db.users[senderNumber].expired) {
+          delete db.users[senderNumber]
+          saveDB()
 
-        return sock.sendMessage(from, {
-          text: "⛔ AKSES HABIS\nHubungi owner: 082162625200"
-        })
+          return sock.sendMessage(from, {
+            text: "⛔ AKSES HABIS\nHubungi owner: 082162625200"
+          })
+        }
       }
 
       // =========================
@@ -239,7 +245,7 @@ Hubungi owner:
 
       // =========================
       // MENU 1
-      // =========================
+      =========================
       if (text === ".1") {
         return sock.sendMessage(from, {
           text: "📌 LIST JOKI USER"
@@ -248,7 +254,7 @@ Hubungi owner:
 
       // =========================
       // MENU 2
-      // =========================
+      =========================
       if (text === ".2") {
         return sock.sendMessage(from, {
           text: "📌 LIST REKBER USER"
@@ -257,7 +263,7 @@ Hubungi owner:
 
       // =========================
       // MENU 3
-      // =========================
+      =========================
       if (text === ".3") {
         return sock.sendMessage(from, {
           text: "📌 PAYMENT USER"
