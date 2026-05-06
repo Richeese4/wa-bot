@@ -11,9 +11,8 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// OWNER CONFIG (NAME LOGIN)
+// OWNER CONFIG
 // =========================
-const OWNER_NAME = "Pedro"
 const OWNER_KEY = "freewilly123"
 
 // =========================
@@ -22,18 +21,18 @@ const OWNER_KEY = "freewilly123"
 const users = {}
 const keys = {}
 
-// contoh menu per user
+// menu per user (berdasarkan nomor)
 const userMenus = {}
 
 // =========================
-// EXPRESS
+// EXPRESS KEEP ALIVE
 // =========================
 const app = express()
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
-app.listen(3000)
+app.listen(3000, () => console.log("🌐 Web aktif"))
 
 // =========================
-// START BOT
+// BOT START
 // =========================
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("session")
@@ -49,15 +48,16 @@ async function startBot() {
 
   const getNum = (jid) => jid.split("@")[0]
 
-  const isLoggedIn = (id) => users[id]?.loggedIn
-
   // =========================
   // CONNECTION
   // =========================
   sock.ev.on("connection.update", (update) => {
     const { connection, qr, lastDisconnect } = update
 
-    if (qr) qrcode.generate(qr, { small: true })
+    if (qr) {
+      console.log("SCAN QR:")
+      qrcode.generate(qr, { small: true })
+    }
 
     if (connection === "open") {
       console.log("BOT READY")
@@ -65,14 +65,12 @@ async function startBot() {
 
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode
-      if (code !== DisconnectReason.loggedOut) {
-        setTimeout(() => startBot(), 5000)
-      }
+      if (code !== DisconnectReason.loggedOut) startBot()
     }
   })
 
   // =========================
-  // LOGIN SYSTEM
+  // MESSAGE HANDLER
   // =========================
   sock.ev.on("messages.upsert", async (m) => {
     const msg = m.messages[0]
@@ -82,29 +80,31 @@ async function startBot() {
     const sender = msg.key.participant || from
     const jid = getNum(sender)
 
-    const text = (
-      msg.message?.conversation ||
-      msg.message?.extendedTextMessage?.text ||
-      ""
-    ).trim().toLowerCase()
+    const text =
+      (msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        "").trim().toLowerCase()
 
     // =========================
-    // OWNER LOGIN (NAME + KEY)
+    // LOGIN SYSTEM
     // =========================
     if (text.startsWith(".login")) {
-      const [, name, key] = text.split(" ")
+      const parts = text.split(" ").filter(Boolean)
+      const input = parts[1]
 
-      if (name === OWNER_NAME && key === OWNER_KEY) {
+      // =========================
+      // OWNER LOGIN (NO NUMBER)
+      // =========================
+      if (input === OWNER_KEY) {
         users[jid] = {
           loggedIn: true,
           role: "owner"
         }
 
-        // menu khusus owner
         userMenus[jid] = [
           ".genkey",
-          ".listuser",
-          ".menu owner panel"
+          ".listkey",
+          ".panel"
         ]
 
         return sock.sendMessage(from, {
@@ -113,15 +113,15 @@ async function startBot() {
       }
 
       // =========================
-      // USER LOGIN (NUMBER + KEY)
+      // USER LOGIN (KEY ONLY)
       // =========================
-      if (!keys[key]) {
+      if (!input || !keys[input]) {
         return sock.sendMessage(from, {
-          text: "❌ Key salah"
+          text: "❌ Key tidak valid"
         })
       }
 
-      if (keys[key].used) {
+      if (keys[input].used) {
         return sock.sendMessage(from, {
           text: "❌ Key sudah dipakai"
         })
@@ -130,17 +130,18 @@ async function startBot() {
       users[jid] = {
         loggedIn: true,
         role: "user",
-        key
+        key: input
       }
 
-      keys[key].used = true
+      keys[input].used = true
 
-      // menu user random / bisa kamu custom per user
-      userMenus[jid] = [
-        ".1 joki",
-        ".2 rekber",
-        ".3 payment"
-      ]
+      if (!userMenus[jid]) {
+        userMenus[jid] = [
+          ".1 joki",
+          ".2 rekber",
+          ".3 payment"
+        ]
+      }
 
       return sock.sendMessage(from, {
         text: "✅ LOGIN BERHASIL"
@@ -148,19 +149,19 @@ async function startBot() {
     }
 
     // =========================
-    // BLOCK IF NOT LOGIN
+    // BLOCK BEFORE LOGIN
     // =========================
-    if (!isLoggedIn(jid)) {
+    if (!users[jid]?.loggedIn) {
       if (text === ".menu") {
         return sock.sendMessage(from, {
-          text: "❌ Harus login dulu\nGunakan .login <number/key> atau .login Pedro freewilly123"
+          text: "❌ Kamu harus login dulu\nGunakan .login <key>"
         })
       }
       return
     }
 
     // =========================
-    // MENU PERSONAL USER
+    // MENU SYSTEM
     // =========================
     if (text === ".menu") {
       const menu = userMenus[jid] || ["menu kosong"]
@@ -174,12 +175,12 @@ ${menu.join("\n")}`
     }
 
     // =========================
-    // OWNER GENERATE KEY
+    // GENERATE KEY (OWNER ONLY)
     // =========================
-    if (text.startsWith(".genkey")) {
+    if (text === ".genkey") {
       if (users[jid]?.role !== "owner") {
         return sock.sendMessage(from, {
-          text: "❌ hanya owner bisa generate key"
+          text: "❌ hanya owner"
         })
       }
 
@@ -191,12 +192,12 @@ ${menu.join("\n")}`
       }
 
       return sock.sendMessage(from, {
-        text: `🔑 KEY: ${key}`
+        text: `🔑 KEY GENERATED: ${key}`
       })
     }
 
     // =========================
-    // EXPIRED CLEANER
+    // AUTO DELETE EXPIRED KEY
     // =========================
     for (let k in keys) {
       if (keys[k].expired && Date.now() > keys[k].expired) {
