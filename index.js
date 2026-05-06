@@ -33,7 +33,7 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // SESSION MENU + TIMER
+  // SESSION MENU
   // =========================
   const menuSession = {}
 
@@ -118,12 +118,10 @@ async function startBot() {
       if (text === ".menu") {
         const username = sender.split("@")[0]
 
-        // hapus session lama kalau ada
         if (menuSession[sender]?.timeout) {
           clearTimeout(menuSession[sender].timeout)
         }
 
-        // buat session baru + auto expire
         const timeout = setTimeout(() => {
           delete menuSession[sender]
         }, 30000)
@@ -135,9 +133,9 @@ async function startBot() {
 Ada yang bisa aku bantu😊?
 
 📌 *PILIH MENU*
-1. Jasa Joki
-2. Rekber / Midman
-3. Payment
+.1 Jasa Joki
+.2 Rekber / Midman
+.3 Payment
 
 ⏳ Menu aktif 30 detik`,
           mentions: [sender]
@@ -146,9 +144,12 @@ Ada yang bisa aku bantu😊?
       }
 
       // =========================
-      // VALIDASI MENU (ANTI NGASAL)
+      // VALIDASI MENU
       // =========================
-      if ((text === "1" || text === "2" || text === "3") && !menuSession[sender]) {
+      if (
+        (text === ".1" || text === ".2" || text === ".3") &&
+        !menuSession[sender]
+      ) {
         await sock.sendMessage(from, {
           text: "❌ Ketik *.menu* dulu ya kak"
         })
@@ -158,7 +159,7 @@ Ada yang bisa aku bantu😊?
       // =========================
       // MENU 1
       // =========================
-      if (text === "1" && menuSession[sender]) {
+      if (text === ".1" && menuSession[sender]) {
         clearTimeout(menuSession[sender].timeout)
         delete menuSession[sender]
 
@@ -285,7 +286,7 @@ DragonHeart (20K)
       // =========================
       // MENU 2
       // =========================
-      if (text === "2" && menuSession[sender]) {
+      if (text === ".2" && menuSession[sender]) {
         clearTimeout(menuSession[sender].timeout)
         delete menuSession[sender]
 
@@ -310,14 +311,14 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
       // =========================
       // MENU 3
       // =========================
-      if (text === "3" && menuSession[sender]) {
+      if (text === ".3" && menuSession[sender]) {
         clearTimeout(menuSession[sender].timeout)
         delete menuSession[sender]
 
         await sock.sendMessage(from, {
           text: `💳 *PAYMENT/PEMBAYARAN*
 
-1. QRIS AllPayment (ketik .qris)
+1. QRIS AllPayment A/N ZnoidFamz (ketik .qris)
 2. DANA: 081290783833 A/N HA*** PRA***
 3. GOPAY: 081290783833 A/N HA*** PRA***
 4. BCA: 3780620578 A/N HA*** PRA***
