@@ -13,20 +13,17 @@ const {
 // =========================
 // CONFIG OWNER
 // =========================
-const OWNER_NUMBER = "6282162625200" // 082162625200
+const OWNER_NUMBER = "6282162625200"
 const OWNER_KEY = "freewilly123"
 
 // =========================
-// DATABASE SIMPLE
+// DATABASE
 // =========================
-const users = {} 
+const users = {}
 const keys = {}
 
-// contoh key format:
-// keys["ABCDE"] = { used: false, expired: timestamp, owner: false }
-
 // =========================
-// EXPRESS KEEP ALIVE
+// EXPRESS
 // =========================
 const app = express()
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
@@ -68,18 +65,16 @@ async function startBot() {
   })
 
   // =========================
-  // LOGIN SYSTEM
+  // HELPERS FIX OWNER DETECT
   // =========================
-  function isLoggedIn(sender) {
-    return users[sender]?.loggedIn
-  }
+  const getNumber = (jid) => jid.split("@")[0]
 
-  function isOwner(sender) {
-    return sender.includes(OWNER_NUMBER)
-  }
+  const isOwner = (sender) => getNumber(sender) === OWNER_NUMBER
+
+  const isLoggedIn = (sender) => users[sender]?.loggedIn
 
   // =========================
-  // MESSAGE HANDLER
+  // MESSAGE
   // =========================
   sock.ev.on("messages.upsert", async (m) => {
     const msg = m.messages[0]
@@ -97,22 +92,22 @@ async function startBot() {
     // =========================
     // LOGIN SYSTEM
     // =========================
-    if (text.startsWith(".login ")) {
+    if (text.startsWith(".login")) {
       const key = text.split(" ")[1]
 
-      // OWNER LOGIN
-      if (sender.includes(OWNER_NUMBER) && key === OWNER_KEY) {
+      // ================= OWNER LOGIN =================
+      if (isOwner(sender) && key === OWNER_KEY) {
         users[sender] = {
           loggedIn: true,
           role: "owner"
         }
 
         return sock.sendMessage(from, {
-          text: "✅ Owner login berhasil (UNLIMITED ACCESS)"
+          text: "✅ OWNER LOGIN BERHASIL"
         })
       }
 
-      // USER LOGIN
+      // ================= USER LOGIN =================
       if (!keys[key]) {
         return sock.sendMessage(from, {
           text: "❌ Key tidak valid"
@@ -125,7 +120,6 @@ async function startBot() {
         })
       }
 
-      // activate user
       users[sender] = {
         loggedIn: true,
         role: "user",
@@ -135,12 +129,12 @@ async function startBot() {
       keys[key].used = true
 
       return sock.sendMessage(from, {
-        text: "✅ Login berhasil (24 jam aktif)"
+        text: "✅ Login berhasil (24 jam)"
       })
     }
 
     // =========================
-    // BLOCK BEFORE LOGIN
+    // BLOCK IF NOT LOGIN
     // =========================
     if (!isLoggedIn(sender)) {
       if (text === ".menu") {
@@ -152,35 +146,34 @@ async function startBot() {
     }
 
     // =========================
-    // MENU OWNER
+    // OWNER MENU
     // =========================
     if (text === ".menu" && isOwner(sender)) {
       return sock.sendMessage(from, {
         text:
 `👑 OWNER MENU
 
-1. .genkey <jam>
-2. .listuser
-3. .broadcast`
+.genkey <jam>
+.listkey`
       })
     }
 
     // =========================
-    // MENU USER (DINAMIS PER USER)
+    // USER MENU
     // =========================
     if (text === ".menu") {
       return sock.sendMessage(from, {
         text:
-`📌 MENU USER
+`📌 USER MENU
 
-1. Joki Service
-2. Rekber
-3. Payment`
+.1 Joki
+.2 Rekber
+.3 Payment`
       })
     }
 
     // =========================
-    // GENERATE KEY (OWNER ONLY)
+    // GENERATE KEY (OWNER ONLY FIXED)
     // =========================
     if (text.startsWith(".genkey")) {
       if (!isOwner(sender)) {
@@ -194,20 +187,20 @@ async function startBot() {
 
       keys[key] = {
         used: false,
-        expired: Date.now() + hours * 3600000,
-        owner: false
+        expired: Date.now() + hours * 3600000
       }
 
       return sock.sendMessage(from, {
-        text: `🔑 KEY GENERATED
+        text:
+`🔑 KEY GENERATED
 
-Key: ${key}
-Durasi: ${hours} jam`
+KEY: ${key}
+DURASI: ${hours} JAM`
       })
     }
 
     // =========================
-    // AUTO EXPIRED CHECK
+    // AUTO EXPIRED CLEANER
     // =========================
     for (let k in keys) {
       if (keys[k].expired && Date.now() > keys[k].expired) {
