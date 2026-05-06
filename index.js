@@ -245,7 +245,7 @@ Hubungi owner:
 
       // =========================
       // MENU 1
-      =========================
+      // =========================
       if (text === ".1") {
         return sock.sendMessage(from, {
           text: "📌 LIST JOKI USER"
@@ -254,7 +254,7 @@ Hubungi owner:
 
       // =========================
       // MENU 2
-      =========================
+      // =========================
       if (text === ".2") {
         return sock.sendMessage(from, {
           text: "📌 LIST REKBER USER"
@@ -263,7 +263,7 @@ Hubungi owner:
 
       // =========================
       // MENU 3
-      =========================
+      // =========================
       if (text === ".3") {
         return sock.sendMessage(from, {
           text: "📌 PAYMENT USER"
