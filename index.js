@@ -10,12 +10,72 @@ const {
   fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys")
 
+// MIDTRANS (PAKAI FILE TERPISAH)
+const snap = require("./midtrans")
+
 // =========================
-// KEEP ALIVE (ANTI SLEEP)
+// DATABASE (ANTI CRASH)
+// =========================
+const dbFile = "./db.json"
+
+function loadDB() {
+  if (!fs.existsSync(dbFile)) {
+    return { orders: {}, users: {}, withdraw: [] }
+  }
+  return JSON.parse(fs.readFileSync(dbFile))
+}
+
+function saveDB(data) {
+  fs.writeFileSync(dbFile, JSON.stringify(data, null, 2))
+}
+
+// =========================
+// EXPRESS (WEBHOOK)
 // =========================
 const app = express()
+app.use(express.json())
+
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
-app.listen(3000, () => console.log("🌐 Web aktif di port 3000"))
+
+let sockGlobal = null
+
+app.post("/callback", async (req, res) => {
+  try {
+    if (!sockGlobal) return res.send("Bot belum siap")
+
+    const data = req.body
+    console.log("🔥 Webhook:", data)
+
+    const orderId = data.order_id
+    const status = data.transaction_status
+
+    const db = loadDB()
+    if (!db.orders[orderId]) return res.sendStatus(404)
+
+    if (status === "settlement" || status === "capture") {
+      db.orders[orderId].status = "PAID"
+      saveDB(db)
+
+      const order = db.orders[orderId]
+
+      await sockGlobal.sendMessage(order.buyer, {
+        text: `✅ Pembayaran terdeteksi!\nID: ${orderId}`
+      })
+
+      await sockGlobal.sendMessage(order.seller, {
+        text: `📦 Buyer sudah bayar\nID: ${orderId}\nSilakan kirim barang`
+      })
+    }
+
+    res.send("OK")
+  } catch (err) {
+    console.log("WEBHOOK ERROR:", err)
+    res.sendStatus(500)
+  }
+})
+
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => console.log("🌐 Web aktif di port", PORT))
 
 // =========================
 // START BOT
@@ -31,12 +91,13 @@ async function startBot() {
     browser: ["Windows", "Chrome", "120.0.0"]
   })
 
+  sockGlobal = sock
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // 🔥 ANTI DISCONNECT PRO
+  // CONNECTION (ANTI DC PRO)
   // =========================
-  let retryCount = 0
+  let retry = 0
 
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
@@ -46,40 +107,29 @@ async function startBot() {
       qrcode.generate(qr, { small: true })
     }
 
-    if (connection === "connecting") {
-      console.log("🔄 Menghubungkan...")
-    }
-
     if (connection === "open") {
       console.log("✅ BOT AKTIF")
-      retryCount = 0
+      retry = 0
     }
 
     if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode
-      const shouldReconnect = reason !== DisconnectReason.loggedOut
-
-      console.log("❌ Koneksi putus. Reason:", reason)
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
       if (shouldReconnect) {
-        retryCount++
+        retry++
+        const delay = Math.min(3000 * retry, 15000)
 
-        let delay = 3000 * retryCount
-        if (delay > 15000) delay = 15000
-
-        console.log(`🔁 Reconnect ke-${retryCount} dalam ${delay / 1000} detik`)
-
-        setTimeout(() => {
-          startBot()
-        }, delay)
+        console.log(`🔁 Reconnect dalam ${delay}ms`)
+        setTimeout(startBot, delay)
       } else {
-        console.log("🚫 Session logout! Scan ulang QR")
+        console.log("🚫 Logout, scan ulang QR")
       }
     }
   })
 
   // =========================
-  // AUTO TOLAK TELEPON
+  // AUTO REJECT CALL
   // =========================
   sock.ev.on("call", async (calls) => {
     for (let call of calls) {
@@ -90,7 +140,7 @@ async function startBot() {
   })
 
   // =========================
-  // WELCOME MEMBER (FIX)
+  // WELCOME MEMBER
   // =========================
   sock.ev.on("group-participants.update", async (anu) => {
     try {
@@ -99,7 +149,7 @@ async function startBot() {
           if (fs.existsSync(__dirname + "/welcome.jpg")) {
             await sock.sendMessage(anu.id, {
               image: fs.readFileSync(__dirname + "/welcome.jpg"),
-              caption: `👋 Selamat datang @${user.split("@")[0]} di group!\nSemoga betah ya ✨`,
+              caption: `👋 Selamat datang @${user.split("@")[0]}\nSemoga betah ya ✨`,
               mentions: [user]
             })
           }
@@ -122,7 +172,6 @@ async function startBot() {
       const isGroup = from.endsWith("@g.us")
       const sender = msg.key.participant || from
 
-      // auto read
       await sock.readMessages([msg.key])
 
       const text =
@@ -133,52 +182,157 @@ async function startBot() {
       // =========================
       // QRIS
       // =========================
-      if (text.toLowerCase() === ".qris") {
+      if (text === ".qris") {
         if (fs.existsSync(__dirname + "/qris.jpg")) {
           await sock.sendMessage(from, {
             image: fs.readFileSync(__dirname + "/qris.jpg"),
-            caption: "💸 Scan QRIS untuk pembayaran"
+            caption: "💸 Scan QRIS"
           })
         }
         return
       }
 
-      if (!isGroup) return
-
       // =========================
-      // CEK ADMIN
+      // REKBER
       // =========================
-      let isAdmin = false
-      try {
-        const meta = await sock.groupMetadata(from)
-        isAdmin = meta.participants.some(
-          (p) => p.id === sender && p.admin !== null
-        )
-      } catch {}
+      if (text.startsWith(".rekber")) {
+        const [cmd, nomor, harga] = text.split(" ")
 
-      if (isAdmin) return
+        if (!nomor || !harga) {
+          return sock.sendMessage(from, {
+            text: "Format:\n.rekber 628xxx 10000"
+          })
+        }
 
-      // =========================
-      // 🚫 LINK UNDANGAN WHATSAPP SAJA
-      // =========================
-      const isInvite =
-        /chat\.whatsapp\.com/i.test(text) ||
-        /whatsapp\.com\/invite/i.test(text)
+        const fee = 2000
+        const total = parseInt(harga) + fee
+        const orderId = "ORD-" + Date.now()
 
-      if (isInvite) {
-        await sock.sendMessage(from, { delete: msg.key })
-        return
+        const trx = await snap.createTransaction({
+          transaction_details: {
+            order_id: orderId,
+            gross_amount: total
+          }
+        })
+
+        const db = loadDB()
+
+        db.orders[orderId] = {
+          buyer: sender,
+          seller: nomor + "@s.whatsapp.net",
+          amount: parseInt(harga),
+          fee,
+          total,
+          status: "WAITING"
+        }
+
+        saveDB(db)
+
+        await sock.sendMessage(from, {
+          text: `💳 PEMBAYARAN
+
+ID: ${orderId}
+Total: ${total}
+
+Bayar:
+${trx.redirect_url}`
+        })
       }
 
       // =========================
-      // 🚫 STATUS TAG GROUP SAJA
+      // SELESAI
       // =========================
-      const isStatusGroupTag =
-        msg.message?.protocolMessage?.type === 25
+      if (text.startsWith(".selesai")) {
+        const orderId = text.split(" ")[1]
+        const db = loadDB()
+        const order = db.orders[orderId]
 
-      if (isStatusGroupTag) {
-        await sock.sendMessage(from, { delete: msg.key })
-        return
+        if (!order) return
+        if (order.buyer !== sender) return
+
+        if (order.status !== "PAID") {
+          return sock.sendMessage(from, { text: "❌ Belum dibayar" })
+        }
+
+        order.status = "DONE"
+
+        if (!db.users[order.seller]) {
+          db.users[order.seller] = { balance: 0 }
+        }
+
+        db.users[order.seller].balance += order.amount
+
+        saveDB(db)
+
+        await sock.sendMessage(from, {
+          text: "✅ Dana dikirim ke seller"
+        })
+      }
+
+      // =========================
+      // SALDO
+      // =========================
+      if (text === ".saldo") {
+        const db = loadDB()
+        const user = db.users[sender] || { balance: 0 }
+
+        await sock.sendMessage(from, {
+          text: `💰 Saldo: ${user.balance}`
+        })
+      }
+
+      // =========================
+      // WITHDRAW
+      // =========================
+      if (text.startsWith(".withdraw")) {
+        const amount = parseInt(text.split(" ")[1])
+        const db = loadDB()
+
+        const user = db.users[sender]
+
+        if (!user || user.balance < amount) {
+          return sock.sendMessage(from, {
+            text: "❌ Saldo tidak cukup"
+          })
+        }
+
+        user.balance -= amount
+
+        db.withdraw.push({
+          user: sender,
+          amount,
+          status: "PENDING"
+        })
+
+        saveDB(db)
+
+        await sock.sendMessage(from, {
+          text: "📤 Withdraw diproses"
+        })
+      }
+
+      // =========================
+      // FILTER GRUP
+      // =========================
+      if (isGroup) {
+        let isAdmin = false
+        try {
+          const meta = await sock.groupMetadata(from)
+          isAdmin = meta.participants.some(
+            (p) => p.id === sender && p.admin !== null
+          )
+        } catch {}
+
+        if (!isAdmin) {
+          const isInvite =
+            /chat\.whatsapp\.com/i.test(text) ||
+            /whatsapp\.com\/invite/i.test(text)
+
+          if (isInvite) {
+            await sock.sendMessage(from, { delete: msg.key })
+            return
+          }
+        }
       }
 
     } catch (err) {
@@ -188,21 +342,16 @@ async function startBot() {
 }
 
 // =========================
-// ANTI CRASH GLOBAL
+// GLOBAL ANTI CRASH
 // =========================
-process.on("uncaughtException", (err) => {
-  console.log("❌ ERROR:", err)
-})
-
-process.on("unhandledRejection", (err) => {
-  console.log("❌ PROMISE ERROR:", err)
-})
+process.on("uncaughtException", console.log)
+process.on("unhandledRejection", console.log)
 
 // =========================
 // KEEP ALIVE LOG
 // =========================
 setInterval(() => {
-  console.log("🟢 Bot masih hidup:", new Date().toLocaleTimeString())
+  console.log("🟢 Bot hidup:", new Date().toLocaleTimeString())
 }, 60000)
 
 // =========================
