@@ -11,16 +11,16 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// CONFIG
+// OWNER (SUDAH DISET)
 // =========================
-const owner = "628xxxxxxxxxx@s.whatsapp.net" // GANTI
+const ownerNumber = "6282162625200@s.whatsapp.net"
 
 // =========================
 // KEEP ALIVE
 // =========================
 const app = express()
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
-app.listen(3000)
+app.listen(3000, () => console.log("🌐 Web aktif"))
 
 // =========================
 // DATABASE
@@ -42,13 +42,13 @@ function saveDB() {
 // =========================
 // GENERATE KEY
 // =========================
-function generateKey(length = 8) {
+function generateKey(len = 8) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  let result = ""
-  for (let i = 0; i < length; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
+  let key = ""
+  for (let i = 0; i < len; i++) {
+    key += chars[Math.floor(Math.random() * chars.length)]
   }
-  return result
+  return key
 }
 
 // =========================
@@ -66,16 +66,19 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds)
 
+  // =========================
+  // CONNECTION
+  // =========================
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
 
     if (qr) qrcode.generate(qr, { small: true })
-    if (connection === "open") console.log("✅ BOT AKTIF")
+    if (connection === "open") console.log("BOT AKTIF")
 
     if (connection === "close") {
-      const shouldReconnect =
+      const reconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-      if (shouldReconnect) startBot()
+      if (reconnect) startBot()
     }
   })
 
@@ -99,50 +102,67 @@ async function startBot() {
       await sock.readMessages([msg.key])
 
       // =========================
-      // OWNER TAMBAH RESELLER
+      // GENERATE KEY (OWNER ONLY)
       // =========================
-      if (text.startsWith(".addreseller") && sender === owner) {
-        const nomor = text.split(" ")[1] + "@s.whatsapp.net"
-        db.resellers[nomor] = true
-        saveDB()
-
-        return sock.sendMessage(from, {
-          text: "✅ Reseller ditambahkan"
-        })
-      }
-
-      // =========================
-      // GENERATE KEY
-      // =========================
-      if (text.startsWith(".genkey")) {
-        if (sender !== owner && !db.resellers[sender]) {
-          return sock.sendMessage(from, {
-            text: "❌ Khusus owner / reseller"
-          })
-        }
-
-        const args = text.split(" ")
-        const duration = args[1] || "24"
-
+      if (text.startsWith(".genkey") && sender === ownerNumber) {
+        const dur = text.split(" ")[1] || "24"
         const key = generateKey()
 
         db.keys[key] = {
           used: false,
-          duration: parseInt(duration) * 3600000
+          duration: parseInt(dur) * 3600000
         }
 
         saveDB()
 
         return sock.sendMessage(from, {
-          text: `🔑 KEY
+          text: `🔑 KEY GENERATED
 
-${key}
-Durasi: ${duration} jam`
+KEY: ${key}
+DURASI: ${dur} JAM`
         })
       }
 
       // =========================
-      // LOGIN
+      // AUTO KIRIM KEY (SIMULASI PAYMENT)
+      // =========================
+      if (text.startsWith(".bayar") && sender === ownerNumber) {
+        const nomor = text.split(" ")[1]
+        const dur = text.split(" ")[2] || "24"
+
+        if (!nomor) {
+          return sock.sendMessage(from, {
+            text: "Format:\n.bayar 628xxx 24"
+          })
+        }
+
+        const jid = nomor + "@s.whatsapp.net"
+        const key = generateKey()
+
+        db.keys[key] = {
+          used: false,
+          duration: parseInt(dur) * 3600000
+        }
+
+        saveDB()
+
+        await sock.sendMessage(jid, {
+          text: `✅ PEMBAYARAN DITERIMA
+
+🔑 KEY KAMU:
+${key}
+
+Gunakan:
+.login ${nomor} ${key}`
+        })
+
+        return sock.sendMessage(from, {
+          text: "✅ Key berhasil dikirim ke user"
+        })
+      }
+
+      // =========================
+      // LOGIN SYSTEM
       // =========================
       if (text.startsWith(".login")) {
         const args = text.split(" ")
@@ -151,14 +171,14 @@ Durasi: ${duration} jam`
 
         if (!nomor || !key) {
           return sock.sendMessage(from, {
-            text: "❌ Format:\n.login 628xxxx KEY"
+            text: "Format:\n.login 628xxx KEY"
           })
         }
 
         const jid = nomor + "@s.whatsapp.net"
 
         if (!db.keys[key]) {
-          return sock.sendMessage(from, { text: "❌ Key tidak valid" })
+          return sock.sendMessage(from, { text: "❌ Key salah" })
         }
 
         if (db.keys[key].used) {
@@ -167,18 +187,18 @@ Durasi: ${duration} jam`
 
         db.users[jid] = {
           expired: Date.now() + db.keys[key].duration,
-          menu: `📌 MENU DEFAULT
+          menu: `📌 MENU USER
 
-.1 Menu 1
-.2 Menu 2
-.3 Menu 3`
+.1 Joki
+.2 Rekber
+.3 Payment`
         }
 
         db.keys[key].used = true
         saveDB()
 
         return sock.sendMessage(from, {
-          text: "✅ Login berhasil!\nKetik .menu"
+          text: "✅ Login sukses! ketik .menu"
         })
       }
 
@@ -188,63 +208,29 @@ Durasi: ${duration} jam`
       if (!db.users[sender]) {
         if (text.startsWith(".")) {
           return sock.sendMessage(from, {
-            text: `🔒 Harus login!
+            text: `🔒 BELUM LOGIN
 
 Hubungi owner:
-${owner.replace("@s.whatsapp.net", "")}`
+082162625200`
           })
         }
         return
       }
 
       // =========================
-      // EXPIRED
+      // EXPIRED CHECK
       // =========================
       if (Date.now() > db.users[sender].expired) {
         delete db.users[sender]
         saveDB()
 
         return sock.sendMessage(from, {
-          text: "⛔ Akses habis, hubungi owner"
+          text: "⛔ AKSES HABIS\nHubungi owner: 082162625200"
         })
       }
 
       // =========================
-      // FILTER COMMAND
-      // =========================
-      if (!text.startsWith(".")) return
-
-      // =========================
-      // SET MENU (OWNER)
-      // =========================
-      if (text.startsWith(".setmenu") && sender === owner) {
-        const nomor = text.split(" ")[1]
-        const isi = text.split("|")[1]
-
-        if (!nomor || !isi) {
-          return sock.sendMessage(from, {
-            text: "Format:\n.setmenu 628xxx | isi menu"
-          })
-        }
-
-        const jid = nomor + "@s.whatsapp.net"
-
-        if (!db.users[jid]) {
-          return sock.sendMessage(from, {
-            text: "User belum login"
-          })
-        }
-
-        db.users[jid].menu = isi
-        saveDB()
-
-        return sock.sendMessage(from, {
-          text: "✅ Menu berhasil di set"
-        })
-      }
-
-      // =========================
-      // MENU USER
+      // MENU
       // =========================
       if (text === ".menu") {
         return sock.sendMessage(from, {
@@ -253,23 +239,29 @@ ${owner.replace("@s.whatsapp.net", "")}`
       }
 
       // =========================
-      // MENU RESPON
+      // MENU 1
       // =========================
       if (text === ".1") {
         return sock.sendMessage(from, {
-          text: "📌 Respon menu 1 milik kamu"
+          text: "📌 JOKI LIST USER"
         })
       }
 
+      // =========================
+      // MENU 2
+      // =========================
       if (text === ".2") {
         return sock.sendMessage(from, {
-          text: "📌 Respon menu 2 milik kamu"
+          text: "📌 REKBER LIST USER"
         })
       }
 
+      // =========================
+      // MENU 3
+      // =========================
       if (text === ".3") {
         return sock.sendMessage(from, {
-          text: "📌 Respon menu 3 milik kamu"
+          text: "📌 PAYMENT INFO USER"
         })
       }
 
@@ -279,4 +271,7 @@ ${owner.replace("@s.whatsapp.net", "")}`
   })
 }
 
+// =========================
+// RUN
+// =========================
 startBot()
