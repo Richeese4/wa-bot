@@ -33,6 +33,11 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
+  // SESSION MENU + TIMER
+  // =========================
+  const menuSession = {}
+
+  // =========================
   // CONNECTION
   // =========================
   sock.ev.on("connection.update", (update) => {
@@ -97,7 +102,6 @@ async function startBot() {
       const isGroup = from.endsWith("@g.us")
       const sender = msg.key.participant || from
 
-      // 🔥 FIX BESAR DI SINI (WAJIB)
       const text = (
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
@@ -105,9 +109,6 @@ async function startBot() {
         msg.message?.videoMessage?.caption ||
         ""
       ).trim().toLowerCase()
-
-      // DEBUG (hapus nanti kalau sudah normal)
-      console.log("📩 TEXT:", text)
 
       await sock.readMessages([msg.key])
 
@@ -117,26 +118,50 @@ async function startBot() {
       if (text === ".menu") {
         const username = sender.split("@")[0]
 
+        // hapus session lama kalau ada
+        if (menuSession[sender]?.timeout) {
+          clearTimeout(menuSession[sender].timeout)
+        }
+
+        // buat session baru + auto expire
+        const timeout = setTimeout(() => {
+          delete menuSession[sender]
+        }, 30000)
+
+        menuSession[sender] = { timeout }
+
         await sock.sendMessage(from, {
           text: `👋 Hallo Kak @${username}
-
-Ada yang bisa aku bantu?
+Ada yang bisa aku bantu😊?
 
 📌 *PILIH MENU*
 1. Jasa Joki
 2. Rekber / Midman
 3. Payment
 
-Ketik angka (contoh: 1)`,
+⏳ Menu aktif 30 detik`,
           mentions: [sender]
         })
         return
       }
 
       // =========================
-      // MENU 1 - JOKI
+      // VALIDASI MENU (ANTI NGASAL)
       // =========================
-      if (text === "1") {
+      if ((text === "1" || text === "2" || text === "3") && !menuSession[sender]) {
+        await sock.sendMessage(from, {
+          text: "❌ Ketik *.menu* dulu ya kak"
+        })
+        return
+      }
+
+      // =========================
+      // MENU 1
+      // =========================
+      if (text === "1" && menuSession[sender]) {
+        clearTimeout(menuSession[sender].timeout)
+        delete menuSession[sender]
+
         await sock.sendMessage(from, {
           text: `📌 *LIST JOKI BY ZNOIDFAMZ*
 
@@ -258,9 +283,12 @@ DragonHeart (20K)
       }
 
       // =========================
-      // MENU 2 - REKBER
+      // MENU 2
       // =========================
-      if (text === "2") {
+      if (text === "2" && menuSession[sender]) {
+        clearTimeout(menuSession[sender].timeout)
+        delete menuSession[sender]
+
         await sock.sendMessage(from, {
           text: `📌 *LIST FEE REKBER BY ZNOIDFAMZ*
 
@@ -280,9 +308,12 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
       }
 
       // =========================
-      // MENU 3 - PAYMENT
+      // MENU 3
       // =========================
-      if (text === "3") {
+      if (text === "3" && menuSession[sender]) {
+        clearTimeout(menuSession[sender].timeout)
+        delete menuSession[sender]
+
         await sock.sendMessage(from, {
           text: `💳 *PAYMENT/PEMBAYARAN*
 
@@ -310,7 +341,7 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
       }
 
       // =========================
-      // ANTI LINK (GROUP ONLY)
+      // ANTI LINK
       // =========================
       if (isGroup) {
         let isAdmin = false
