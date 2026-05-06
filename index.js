@@ -1,3 +1,4 @@
+const require("dotenv").config()
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
