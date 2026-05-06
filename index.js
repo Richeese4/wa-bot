@@ -61,36 +61,6 @@ async function startBot() {
   })
 
   // =========================
-  // AUTO REJECT CALL
-  // =========================
-  sock.ev.on("call", async (calls) => {
-    for (let call of calls) {
-      if (call.status === "offer") {
-        await sock.rejectCall(call.id, call.from)
-      }
-    }
-  })
-
-  // =========================
-  // WELCOME
-  // =========================
-  sock.ev.on("group-participants.update", async (anu) => {
-    try {
-      if (anu.action === "add") {
-        for (let user of anu.participants) {
-          if (fs.existsSync("./welcome.jpg")) {
-            await sock.sendMessage(anu.id, {
-              image: fs.readFileSync("./welcome.jpg"),
-              caption: `👋 Selamat datang @${user.split("@")[0]} di group!`,
-              mentions: [user]
-            })
-          }
-        }
-      }
-    } catch {}
-  })
-
-  // =========================
   // MESSAGE HANDLER
   // =========================
   sock.ev.on("messages.upsert", async (m) => {
@@ -99,14 +69,11 @@ async function startBot() {
       if (!msg.message) return
 
       const from = msg.key.remoteJid
-      const isGroup = from.endsWith("@g.us")
       const sender = msg.key.participant || from
 
       const text = (
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        msg.message?.videoMessage?.caption ||
         ""
       ).trim().toLowerCase()
 
@@ -118,10 +85,12 @@ async function startBot() {
       if (text === ".menu") {
         const username = sender.split("@")[0]
 
+        // reset session lama
         if (menuSession[sender]?.timeout) {
           clearTimeout(menuSession[sender].timeout)
         }
 
+        // buat session baru (30 detik)
         const timeout = setTimeout(() => {
           delete menuSession[sender]
         }, 30000)
@@ -144,22 +113,19 @@ Ada yang bisa aku bantu😊?
       }
 
       // =========================
-      // VALIDASI MENU
+      // FILTER: HANYA PROSES COMMAND TITIK
       // =========================
-      if (
-        (text === ".1" || text === ".2" || text === ".3") &&
-        !menuSession[sender]
-      ) {
-        await sock.sendMessage(from, {
-          text: "❌ Ketik *.menu* dulu ya kak"
-        })
-        return
-      }
+      if (!text.startsWith(".")) return
+
+      // =========================
+      // MENU HARUS AKTIF
+      // =========================
+      if (!menuSession[sender]) return
 
       // =========================
       // MENU 1
       // =========================
-      if (text === ".1" && menuSession[sender]) {
+      if (text === ".1") {
         clearTimeout(menuSession[sender].timeout)
         delete menuSession[sender]
 
@@ -278,6 +244,7 @@ Shark Anchor (15K) No Magnet
 DragonStorm (15K)
 DragonHeart (20K)
 
+Terpercayaa Amanah 100%
 📩 Minat? Chat Worker Kami!`
         })
         return
@@ -286,7 +253,7 @@ DragonHeart (20K)
       // =========================
       // MENU 2
       // =========================
-      if (text === ".2" && menuSession[sender]) {
+      if (text === ".2") {
         clearTimeout(menuSession[sender].timeout)
         delete menuSession[sender]
 
@@ -311,7 +278,7 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
       // =========================
       // MENU 3
       // =========================
-      if (text === ".3" && menuSession[sender]) {
+      if (text === ".3") {
         clearTimeout(menuSession[sender].timeout)
         delete menuSession[sender]
 
@@ -339,29 +306,6 @@ Ketik *.qris* Untuk Pembayaran AllPayment Atau Pilih Menu Payment!`
           })
         }
         return
-      }
-
-      // =========================
-      // ANTI LINK
-      // =========================
-      if (isGroup) {
-        let isAdmin = false
-        try {
-          const meta = await sock.groupMetadata(from)
-          isAdmin = meta.participants.some(
-            (p) => p.id === sender && p.admin !== null
-          )
-        } catch {}
-
-        if (!isAdmin) {
-          const isInvite =
-            /chat\.whatsapp\.com/i.test(text) ||
-            /whatsapp\.com\/invite/i.test(text)
-
-          if (isInvite) {
-            await sock.sendMessage(from, { delete: msg.key })
-          }
-        }
       }
 
     } catch (err) {
