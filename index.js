@@ -11,7 +11,7 @@ const {
 } = require("@whiskeysockets/baileys")
 
 // =========================
-// KEEP ALIVE (ANTI SLEEP)
+// KEEP ALIVE
 // =========================
 const app = express()
 app.get("/", (req, res) => res.send("Bot aktif 🚀"))
@@ -27,17 +27,14 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     logger: P({ level: "silent" }),
-    auth: state,
-    browser: ["Windows", "Chrome", "120.0.0"]
+    auth: state
   })
 
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // 🔥 ANTI DISCONNECT PRO
+  // CONNECTION
   // =========================
-  let retryCount = 0
-
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
 
@@ -46,40 +43,20 @@ async function startBot() {
       qrcode.generate(qr, { small: true })
     }
 
-    if (connection === "connecting") {
-      console.log("🔄 Menghubungkan...")
-    }
-
     if (connection === "open") {
       console.log("✅ BOT AKTIF")
-      retryCount = 0
     }
 
     if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode
-      const shouldReconnect = reason !== DisconnectReason.loggedOut
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
 
-      console.log("❌ Koneksi putus. Reason:", reason)
-
-      if (shouldReconnect) {
-        retryCount++
-
-        let delay = 3000 * retryCount
-        if (delay > 15000) delay = 15000
-
-        console.log(`🔁 Reconnect ke-${retryCount} dalam ${delay / 1000} detik`)
-
-        setTimeout(() => {
-          startBot()
-        }, delay)
-      } else {
-        console.log("🚫 Session logout! Scan ulang QR")
-      }
+      if (shouldReconnect) startBot()
     }
   })
 
   // =========================
-  // AUTO TOLAK TELEPON
+  // AUTO REJECT CALL
   // =========================
   sock.ev.on("call", async (calls) => {
     for (let call of calls) {
@@ -90,24 +67,22 @@ async function startBot() {
   })
 
   // =========================
-  // WELCOME MEMBER (FIX)
+  // WELCOME
   // =========================
   sock.ev.on("group-participants.update", async (anu) => {
     try {
       if (anu.action === "add") {
         for (let user of anu.participants) {
-          if (fs.existsSync(__dirname + "/welcome.jpg")) {
+          if (fs.existsSync("./welcome.jpg")) {
             await sock.sendMessage(anu.id, {
-              image: fs.readFileSync(__dirname + "/welcome.jpg"),
-              caption: `👋 Selamat datang @${user.split("@")[0]} di group!\nSemoga betah ya ✨`,
+              image: fs.readFileSync("./welcome.jpg"),
+              caption: `👋 Selamat datang @${user.split("@")[0]} di group!`,
               mentions: [user]
             })
           }
         }
       }
-    } catch (err) {
-      console.log("WELCOME ERROR:", err)
-    }
+    } catch {}
   })
 
   // =========================
@@ -122,63 +97,137 @@ async function startBot() {
       const isGroup = from.endsWith("@g.us")
       const sender = msg.key.participant || from
 
-      // auto read
-      await sock.readMessages([msg.key])
-
       const text =
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
         ""
 
+      await sock.readMessages([msg.key])
+
+      // =========================
+      // MENU
+      // =========================
+      if (text === ".menu") {
+        await sock.sendMessage(from, {
+          text: `👋 Hallo Kak @${sender.split("@")[0]}
+
+Ada yang bisa aku bantu?
+
+📌 *PILIH MENU*
+1. Jasa Joki
+2. Rekber / Midman
+3. Payment
+
+Ketik angka (contoh: 1)`,
+          mentions: [sender]
+        })
+        return
+      }
+
+      // =========================
+      // MENU 1 - JOKI
+      // =========================
+      if (text === "1") {
+        await sock.sendMessage(from, {
+          text: `📌 *LIST JOKI BY ZNOIDFAMZ*
+
+Joki Level
+-100 level = 2k (sea 3) 
+-100 level = 3k (sea 2) 
+-100 level = 4k (sea 1) 
+-500 level =10k (sea 3) 
+-1k level =18k (sea 3)
+
+JOKI MASTERY
+-100 mastery (3k) (sea 3&2) 
+-100 mastery (4k) (sea 1)
+
+Joki Sword
+-CDK (20k)
+-Yama (10k)
+-Tushita (12k)
+
+Joki Fighting Style
+-God Human (20k)
+-Dragon Talon (14k)
+
+Dan masih banyak lagi...
+
+📩 Minat? Chat admin!`
+        })
+        return
+      }
+
+      // =========================
+      // MENU 2 - REKBER
+      // =========================
+      if (text === "2") {
+        await sock.sendMessage(from, {
+          text: `📌 *LIST FEE REKBER*
+
+1.000 - 20.000 = 2.000
+21.000 - 99.000 = 3.000
+100.000 - 299.000 = 5.000
+300.000 - 499.000 = 7.000
+500.000 - 999.000 = 10.000
+
+📩 Lanjut transaksi?
+Ketik *.qris* untuk pembayaran`
+        })
+        return
+      }
+
+      // =========================
+      // MENU 3 - PAYMENT
+      // =========================
+      if (text === "3") {
+        await sock.sendMessage(from, {
+          text: `💳 *PAYMENT*
+
+1. QRIS (ketik .qris)
+2. DANA: 081290783833
+3. GOPAY: 081290783833
+4. BCA: 3780620578
+
+⚠️ Pastikan cek ulang sebelum transfer`
+        })
+        return
+      }
+
       // =========================
       // QRIS
       // =========================
-      if (text.toLowerCase() === ".qris") {
-        if (fs.existsSync(__dirname + "/qris.jpg")) {
+      if (text === ".qris") {
+        if (fs.existsSync("./qris.jpg")) {
           await sock.sendMessage(from, {
-            image: fs.readFileSync(__dirname + "/qris.jpg"),
-            caption: "💸 Scan QRIS untuk pembayaran"
+            image: fs.readFileSync("./qris.jpg"),
+            caption: "💸 Scan QRIS"
           })
         }
         return
       }
 
-      if (!isGroup) return
-
       // =========================
-      // CEK ADMIN
+      // ANTI LINK (GROUP ONLY)
       // =========================
-      let isAdmin = false
-      try {
-        const meta = await sock.groupMetadata(from)
-        isAdmin = meta.participants.some(
-          (p) => p.id === sender && p.admin !== null
-        )
-      } catch {}
+      if (isGroup) {
+        let isAdmin = false
+        try {
+          const meta = await sock.groupMetadata(from)
+          isAdmin = meta.participants.some(
+            (p) => p.id === sender && p.admin !== null
+          )
+        } catch {}
 
-      if (isAdmin) return
+        if (!isAdmin) {
+          const isInvite =
+            /chat\.whatsapp\.com/i.test(text) ||
+            /whatsapp\.com\/invite/i.test(text)
 
-      // =========================
-      // 🚫 LINK UNDANGAN WHATSAPP SAJA
-      // =========================
-      const isInvite =
-        /chat\.whatsapp\.com/i.test(text) ||
-        /whatsapp\.com\/invite/i.test(text)
-
-      if (isInvite) {
-        await sock.sendMessage(from, { delete: msg.key })
-        return
-      }
-
-      // =========================
-      // 🚫 STATUS TAG GROUP SAJA
-      // =========================
-      const isStatusGroupTag =
-        msg.message?.protocolMessage?.type === 25
-
-      if (isStatusGroupTag) {
-        await sock.sendMessage(from, { delete: msg.key })
-        return
+          if (isInvite) {
+            await sock.sendMessage(from, { delete: msg.key })
+          }
+        }
       }
 
     } catch (err) {
@@ -186,24 +235,6 @@ async function startBot() {
     }
   })
 }
-
-// =========================
-// ANTI CRASH GLOBAL
-// =========================
-process.on("uncaughtException", (err) => {
-  console.log("❌ ERROR:", err)
-})
-
-process.on("unhandledRejection", (err) => {
-  console.log("❌ PROMISE ERROR:", err)
-})
-
-// =========================
-// KEEP ALIVE LOG
-// =========================
-setInterval(() => {
-  console.log("🟢 Bot masih hidup:", new Date().toLocaleTimeString())
-}, 60000)
 
 // =========================
 // RUN
