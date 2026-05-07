@@ -537,35 +537,30 @@ ${format(data.expired)}`,
       // =========================
       // ANTILINK
       // =========================
-      if (
-        settings.antilink &&
-        isGroup &&
-        isLink(text)
-      ) {
+if (settings.antilink && isGroup && isLink(text)) {
+  if (isAdmin || sender.includes(OWNER_NUMBER)) return;
 
-        if (
-          isAdmin ||
-          sender.includes(OWNER_NUMBER)
-        ) return
+  if (!botAdmin) {
+    // Opsional: Beritahu group kalau bot butuh jadi admin agar antilink jalan
+    return;
+  }
 
-        if (!botAdmin) return
-
-        const warns =
-          settings.warns || {}
-
-        if (!warns[sender]) {
-          warns[sender] = 0
-        }
-
-        warns[sender] += 1
-
-        settings.warns = warns
-
-        await settings.save()
-
-        const left =
-          settings.maxwarn -
-          warns[sender]
+  // --- PROSES HAPUS PESAN ---
+  try {
+    await sock.sendMessage(from, {
+      delete: {
+        remoteJid: from,
+        fromMe: false,
+        id: msg.key.id,
+        participant: sender
+      }
+    });
+  } catch (err) {
+    console.log("Gagal hapus pesan:", err);
+  }
+  // --- LANJUT KE LOGIC WARNING/KICK ---
+  // ... (sisa kode warning kamu)
+}
 
         // delete pesan
         await sock.sendMessage(from, {
