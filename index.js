@@ -18,9 +18,12 @@ const OWNER_KEY = "freewilly123"
 const OWNER_NUMBER = "6282162625200"
 
 // =========================
-// SAFE MONGO CONNECT
+// MONGO CONNECT (FIXED URI)
 // =========================
-mongoose.connect("mongodb+srv://USER:PASS@cluster0.mongodb.net/bot", {
+const MONGO_URI =
+  "mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority"
+
+mongoose.connect(MONGO_URI, {
   serverSelectionTimeoutMS: 10000
 }).then(() => {
   console.log("MongoDB CONNECTED")
@@ -79,7 +82,7 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // CONNECTION HANDLER
+  // CONNECTION FIX
   // =========================
   sock.ev.on("connection.update", ({ connection, qr, lastDisconnect }) => {
 
@@ -136,8 +139,8 @@ async function startBot() {
 
       const from = msg.key.remoteJid
 
-      // FIX SENDER
-      const sender = (msg.key.participant || from).split(":")[0]
+      // FIX SENDER (IMPORTANT)
+      const sender = (msg.key.participant || msg.key.remoteJid).split(":")[0]
 
       const text =
         msg.message.conversation ||
@@ -145,11 +148,10 @@ async function startBot() {
         ""
 
       const cmd = text.toLowerCase().trim()
-
       const isGroup = from.endsWith("@g.us")
 
       // =========================
-      // LOAD SESSION
+      // LOAD SESSION (PERSIST LOGIN)
       // =========================
       let session = await Session.findOne({ jid: sender })
 
@@ -231,11 +233,11 @@ async function startBot() {
         })
       }
 
-      // =========================
-      // ROLE SAFETY
-      // =========================
       const role = session.role || "user"
 
+      // =========================
+      // LIMIT USER COMMAND
+      // =========================
       const allowedUser = [".linkgroup", ".sticker"]
 
       if (role === "user" && cmd.startsWith(".") && !allowedUser.includes(cmd.split(" ")[0])) {
