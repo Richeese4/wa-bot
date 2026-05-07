@@ -18,11 +18,15 @@ const OWNER_KEY = "freewilly123"
 const OWNER_NUMBER = "6282162625200"
 
 // =========================
-// MONGO CONNECT SAFE
+// SAFE MONGO CONNECT
 // =========================
-mongoose.connect("mongodb+srv://USER:PASS@cluster0.mongodb.net/bot")
-mongoose.connection.on("error", e => console.log("MongoDB ERROR:", e))
-mongoose.connection.once("open", () => console.log("MongoDB CONNECTED"))
+mongoose.connect("mongodb+srv://USER:PASS@cluster0.mongodb.net/bot", {
+  serverSelectionTimeoutMS: 10000
+}).then(() => {
+  console.log("MongoDB CONNECTED")
+}).catch(err => {
+  console.log("MongoDB ERROR:", err.message)
+})
 
 // =========================
 // SCHEMA
@@ -39,12 +43,11 @@ const Session = mongoose.model("Session", new mongoose.Schema({
   role: String,
   key: String,
   expired: Number,
-  loginAt: Number,
-  groupAdmin: { type: Boolean, default: false }
+  loginAt: Number
 }))
 
 // =========================
-// EXPRESS
+// EXPRESS KEEP ALIVE
 // =========================
 const app = express()
 app.get("/", (_, res) => res.send("BOT ACTIVE"))
@@ -60,7 +63,7 @@ function format(ms) {
 }
 
 // =========================
-// BOT START
+// START BOT
 // =========================
 async function startBot() {
 
@@ -76,27 +79,29 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // CONNECTION FIX AUTO RECONNECT
+  // CONNECTION HANDLER
   // =========================
   sock.ev.on("connection.update", ({ connection, qr, lastDisconnect }) => {
 
     if (qr) qrcode.generate(qr, { small: true })
 
-    if (connection === "open") console.log("BOT ONLINE")
+    if (connection === "open") {
+      console.log("BOT ONLINE")
+    }
 
     if (connection === "close") {
       const reconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+
       if (reconnect) startBot()
     }
   })
 
   // =========================
-  // WELCOME / LEAVE (NO LOGIN REQUIRED)
+  // WELCOME / LEAVE
   // =========================
   sock.ev.on("group-participants.update", async (m) => {
     try {
-
       if (m.action === "add") {
         for (let p of m.participants) {
           await sock.sendMessage(m.id, {
@@ -116,7 +121,6 @@ async function startBot() {
           })
         }
       }
-
     } catch {}
   })
 
@@ -125,176 +129,188 @@ async function startBot() {
   // =========================
   sock.ev.on("messages.upsert", async ({ messages }) => {
 
-    const msg = messages[0]
-    if (!msg.message) return
+    try {
 
-    const from = msg.key.remoteJid
-    const sender = (msg.key.participant || from).split(":")[0]
+      const msg = messages[0]
+      if (!msg.message) return
 
-    const text =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      ""
+      const from = msg.key.remoteJid
 
-    const cmd = text.toLowerCase().trim()
-    const isGroup = from.endsWith("@g.us")
+      // FIX SENDER
+      const sender = (msg.key.participant || from).split(":")[0]
 
-    // =========================
-    // LOAD SESSION (PERSISTENT LOGIN)
-    // =========================
-    let session = await Session.findOne({ jid: sender })
+      const text =
+        msg.message.conversation ||
+        msg.message.extendedTextMessage?.text ||
+        ""
 
-    // =========================
-    // BLOCK IF NOT LOGIN
-    // =========================
-    if (!session && cmd.startsWith(".") && !cmd.startsWith(".login")) {
-      return sock.sendMessage(from, {
-        text: "❌ Harus login dulu (.login key)"
-      })
-    }
+      const cmd = text.toLowerCase().trim()
 
-    // =========================
-    // LOGIN SYSTEM
-    // =========================
-    if (cmd.startsWith(".login")) {
+      const isGroup = from.endsWith("@g.us")
 
-      const key = cmd.split(" ")[1]
+      // =========================
+      // LOAD SESSION
+      // =========================
+      let session = await Session.findOne({ jid: sender })
 
-      // OWNER LOGIN
-      if (key === OWNER_KEY) {
+      // =========================
+      // BLOCK IF NOT LOGIN
+      // =========================
+      if (!session && cmd.startsWith(".") && !cmd.startsWith(".login")) {
+        return sock.sendMessage(from, {
+          text: "❌ Login dulu (.login key)"
+        })
+      }
+
+      // =========================
+      // LOGIN SYSTEM
+      // =========================
+      if (cmd.startsWith(".login")) {
+
+        const key = cmd.split(" ")[1]
+
+        // OWNER LOGIN
+        if (key === OWNER_KEY) {
+
+          await Session.findOneAndUpdate(
+            { jid: sender },
+            {
+              jid: sender,
+              role: "owner",
+              key,
+              expired: Infinity,
+              loginAt: Date.now()
+            },
+            { upsert: true }
+          )
+
+          return sock.sendMessage(from, {
+            text: "👑 OWNER LOGIN SUCCESS"
+          })
+        }
+
+        // USER LOGIN
+        const data = await User.findOne({ key })
+
+        if (!data || Date.now() > data.expired) {
+          return sock.sendMessage(from, {
+            text: "❌ Key invalid / expired"
+          })
+        }
 
         await Session.findOneAndUpdate(
           { jid: sender },
           {
             jid: sender,
-            role: "owner",
+            role: data.role || "user",
             key,
-            expired: Infinity,
+            expired: data.expired,
             loginAt: Date.now()
           },
           { upsert: true }
         )
 
         return sock.sendMessage(from, {
-          text: "👑 OWNER LOGIN SUCCESS"
+          text: `✅ LOGIN SUCCESS\nExpired: ${format(data.expired)}`
         })
       }
 
-      // USER LOGIN
-      const data = await User.findOne({ key })
+      // reload session
+      session = await Session.findOne({ jid: sender })
 
-      if (!data || Date.now() > data.expired) {
+      if (!session) return
+
+      // =========================
+      // AUTO EXPIRED
+      // =========================
+      if (session.expired !== Infinity && Date.now() > session.expired) {
+        await Session.deleteOne({ jid: sender })
+
         return sock.sendMessage(from, {
-          text: "❌ Key invalid / expired"
+          text: "❌ Session expired"
         })
       }
 
-      await Session.findOneAndUpdate(
-        { jid: sender },
-        {
-          jid: sender,
-          role: data.role || "user",
+      // =========================
+      // ROLE SAFETY
+      // =========================
+      const role = session.role || "user"
+
+      const allowedUser = [".linkgroup", ".sticker"]
+
+      if (role === "user" && cmd.startsWith(".") && !allowedUser.includes(cmd.split(" ")[0])) {
+        return sock.sendMessage(from, {
+          text: "❌ Akses user terbatas"
+        })
+      }
+
+      // =========================
+      // LINK GROUP
+      // =========================
+      if (cmd === ".linkgroup") {
+        if (!isGroup) return
+
+        const code = await sock.groupInviteCode(from)
+
+        return sock.sendMessage(from, {
+          text: "https://chat.whatsapp.com/" + code
+        })
+      }
+
+      // =========================
+      // STICKER
+      // =========================
+      if (cmd === ".sticker") {
+        return sock.sendMessage(from, {
+          text: "Sticker butuh ffmpeg"
+        })
+      }
+
+      // =========================
+      // GENKEY OWNER
+      // =========================
+      if (cmd.startsWith(".genkey")) {
+
+        if (role !== "owner") return
+
+        const jam = parseInt(cmd.split(" ")[1]) || 1
+
+        const key = "KEY-" + Math.random().toString(36).slice(2, 10)
+        const exp = Date.now() + jam * 86400000
+
+        await User.create({
           key,
-          expired: data.expired,
-          loginAt: Date.now()
-        },
-        { upsert: true }
-      )
+          role: "user",
+          expired: exp,
+          createdAt: Date.now()
+        })
 
-      return sock.sendMessage(from, {
-        text: `✅ LOGIN SUCCESS\nExpired: ${format(data.expired)}`
-      })
+        return sock.sendMessage(from, {
+          text: `KEY:\n${key}\nExpired: ${format(exp)}`
+        })
+      }
+
+      // =========================
+      // PANEL
+      // =========================
+      if (cmd === ".panel") {
+
+        if (role !== "owner") return
+
+        const all = await User.find()
+
+        let t = "ACTIVE KEYS:\n\n"
+
+        all.forEach((x, i) => {
+          t += `${i+1}. ${x.key}\n${format(x.expired)}\n\n`
+        })
+
+        return sock.sendMessage(from, { text: t })
+      }
+
+    } catch (e) {
+      console.log("ERROR:", e.message)
     }
-
-    // reload session
-    session = await Session.findOne({ jid: sender })
-
-    // =========================
-    // AUTO EXPIRED
-    // =========================
-    if (session && session.expired !== Infinity && Date.now() > session.expired) {
-      await Session.deleteOne({ jid: sender })
-
-      return sock.sendMessage(from, {
-        text: "❌ Session expired, login ulang"
-      })
-    }
-
-    // =========================
-    // LIMIT USER COMMAND
-    // =========================
-    const allowedUser = [".linkgroup", ".sticker"]
-
-    if (session.role === "user" && !allowedUser.includes(cmd.split(" ")[0]) && cmd.startsWith(".")) {
-      return sock.sendMessage(from, {
-        text: "❌ Akses terbatas (user)"
-      })
-    }
-
-    // =========================
-    // LINK GROUP
-    // =========================
-    if (cmd === ".linkgroup") {
-      if (!isGroup) return
-
-      const code = await sock.groupInviteCode(from)
-
-      return sock.sendMessage(from, {
-        text: "https://chat.whatsapp.com/" + code
-      })
-    }
-
-    // =========================
-    // STICKER (PLACEHOLDER)
-    // =========================
-    if (cmd === ".sticker") {
-      return sock.sendMessage(from, {
-        text: "Sticker system butuh ffmpeg"
-      })
-    }
-
-    // =========================
-    // GENKEY OWNER
-    // =========================
-    if (cmd.startsWith(".genkey")) {
-
-      if (session.role !== "owner") return
-
-      const jam = parseInt(cmd.split(" ")[1]) || 1
-
-      const key = "KEY-" + Math.random().toString(36).slice(2, 10)
-      const exp = Date.now() + jam * 86400000
-
-      await User.create({
-        key,
-        role: "user",
-        expired: exp,
-        createdAt: Date.now()
-      })
-
-      return sock.sendMessage(from, {
-        text: `KEY GENERATED:\n${key}\nExpired: ${format(exp)}`
-      })
-    }
-
-    // =========================
-    // PANEL OWNER
-    // =========================
-    if (cmd === ".panel") {
-
-      if (session.role !== "owner") return
-
-      const all = await User.find()
-
-      let t = "ACTIVE KEYS:\n\n"
-
-      all.forEach((x, i) => {
-        t += `${i+1}. ${x.key}\n${format(x.expired)}\n\n`
-      })
-
-      return sock.sendMessage(from, { text: t })
-    }
-
   })
 }
 
