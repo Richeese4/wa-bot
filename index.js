@@ -199,138 +199,98 @@ async function startBot() {
     }
   })
 
-  // =========================
-  // MESSAGE
-  // =========================
-const msg = messages[0]
-if (!msg.message) return
-
-if (msg.key.remoteJid === "status@broadcast")
-  return
-
 // =========================
-// BASIC INFO
+// MESSAGE EVENT
 // =========================
-const from = msg.key.remoteJid
+sock.ev.on("messages.upsert", async ({ messages }) => {
+    try {
+        const msg = messages[0]
+        if (!msg.message || msg.key.remoteJid === "status@broadcast") return
 
-const participant =
-  msg.key.participant || ""
+        const from = msg.key.remoteJid
+        const isGroup = from.endsWith("@g.us")
+        const sender = (msg.key.participant || from).split(":")[0] + "@s.whatsapp.net"
+        
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ""
+        if (!text) return
 
-const sender =
-  participant || from
+        const cmd = text.trim()
+        const command = cmd.split(" ")[0].toLowerCase()
 
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        ""
+        // =========================
+        // GET SETTINGS & ADMIN STATUS
+        // =========================
+        let settings = await GroupSettings.findOne({ group: from })
+        if (!settings) settings = await GroupSettings.create({ group: from })
 
-      if (!text) return
+        let isAdmin = false
+        let botAdmin = false
 
-      const cmd = text.trim()
+        if (isGroup) {
+            const meta = await sock.groupMetadata(from)
+            const botNumber = sock.user.id.split(":")[0] + "@s.whatsapp.net"
 
-      const command =
-        cmd.split(" ")[0].toLowerCase()
+            const memberObj = meta.participants.find(x => x.id === sender)
+            const botObj = meta.participants.find(x => x.id === botNumber)
 
-      const isGroup =
-        from.endsWith("@g.us")
+            isAdmin = !!memberObj?.admin
+            botAdmin = !!botObj?.admin
+        }
 
-      // =========================
-      // SETTINGS
-      // =========================
-      let settings =
-        await GroupSettings.findOne({
-          group: from
-        })
+        // =========================
+        // ANTILINK LOGIC (Prioritas Tinggi)
+        // =========================
+        if (settings.antilink && isGroup && isLink(text)) {
+            if (!isAdmin && !sender.includes(OWNER_NUMBER)) {
+                if (botAdmin) {
+                    // 1. Hapus Pesan
+                    await sock.sendMessage(from, {
+                        delete: {
+                            remoteJid: from,
+                            fromMe: false,
+                            id: msg.key.id,
+                            participant: sender
+                        }
+                    })
 
-      if (!settings) {
+                    // 2. Warning System
+                    const warns = settings.warns || {}
+                    warns[sender] = (warns[sender] || 0) + 1
+                    settings.warns = warns
+                    await settings.markModified('warns') // Penting untuk update Object di Mongoose
+                    await settings.save()
 
-        settings =
-          await GroupSettings.create({
-            group: from
-          })
-      }
+                    if (warns[sender] >= settings.maxwarn) {
+                        // Kick
+                        await sock.sendMessage(from, { text: `🚫 @${sender.split("@")[0]} dikeluar karena limit link.`, mentions: [sender] })
+                        await sock.groupParticipantsUpdate(from, [sender], "remove")
+                        delete warns[sender]
+                        settings.warns = warns
+                        await settings.save()
+                        return 
+                    } else {
+                        // Pesan Warning
+                        return sock.sendMessage(from, { 
+                            text: `⚠️ Warning ${warns[sender]}/${settings.maxwarn}\nJangan kirim link!`, 
+                            mentions: [sender] 
+                        })
+                    }
+                }
+            }
+        }
 
-// =========================
-// ADMIN CHECK
-// =========================
-let isAdmin = false
-let botAdmin = false
+        // =========================
+        // SESSION & COMMANDS
+        // =========================
+        let session = isGroup ? await Session.findOne({ group: from }) : null
 
-// Di dalam sock.ev.on("messages.upsert")
-if (isGroup) {
-  const meta = await sock.groupMetadata(from);
-  const botNumber = sock.user.id.replace(/:.*@/, "@"); // Format bersih: nomor@s.whatsapp.net
-
-  const member = meta.participants.find(x => x.id === sender);
-  const bot = meta.participants.find(x => x.id === botNumber);
-
-  isAdmin = !!member?.admin || member?.ismadmin; // Beberapa versi baileys menggunakan ismadmin
-  botAdmin = !!bot?.admin;
-}
-
-  // normalize sender
-  const senderId =
-    (msg.key.participant || sender)
-      .split(":")[0]
-      .replace("@s.whatsapp.net", "")
-      .replace("@lid", "")
-
-  // normalize bot
-  const botId =
-    sock.user.id
-      .split(":")[0]
-      .replace("@s.whatsapp.net", "")
-      .replace("@lid", "")
-
-  // cek member
-  const member =
-    meta.participants.find(x => {
-
-      const id =
-        x.id
-          .split(":")[0]
-          .replace("@s.whatsapp.net", "")
-          .replace("@lid", "")
-
-      return id.includes(senderId)
-    })
-
-  // cek bot
-  const bot =
-    meta.participants.find(x => {
-
-      const id =
-        x.id
-          .split(":")[0]
-          .replace("@s.whatsapp.net", "")
-          .replace("@lid", "")
-
-      return id.includes(botId)
-    })
-
-  isAdmin =
-    member?.admin === "admin" ||
-    member?.admin === "superadmin"
-
-  botAdmin =
-    bot?.admin === "admin" ||
-    bot?.admin === "superadmin"
-
-  console.log({
-    sender: senderId,
-    bot: botId,
-    isAdmin,
-    botAdmin
-  })
-}
-      // =========================
-      // SESSION
-      // =========================
-      let session = isGroup
-        ? await Session.findOne({
-            group: from
-          })
-        : null
+        // (Lanjutkan dengan kode command .login, .menu, dll di bawah sini...)
+        // ...
+        
+    } catch (e) {
+        console.log("ERROR:", e)
+    }
+})
 
       // =========================
       // BLOCK BELUM LOGIN
