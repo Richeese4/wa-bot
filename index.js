@@ -107,7 +107,7 @@ function format(ms) {
 function isLink(text) {
 
   const regex =
-    /(https?:\/\/|chat\.whatsapp\.com|wa\.me)/gi
+    /((https?:\/\/)|(www\.)|(chat\.whatsapp\.com\/)|(wa\.me\/))/gi
 
   return regex.test(text)
 }
@@ -218,13 +218,18 @@ async function startBot() {
       const from = msg.key.remoteJid
 
       const sender =
-        (msg.key.participant || from)
-        .split(":")[0]
+  (msg.key.participant || from)
+  .split(":")[0]
 
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        ""
+const text =
+  msg.message.conversation ||
+  msg.message.extendedTextMessage?.text ||
+  msg.message.imageMessage?.caption ||
+  msg.message.videoMessage?.caption ||
+  ""
+
+const isBotMessage =
+  msg.key.fromMe
 
       if (!text) return
 
@@ -264,23 +269,27 @@ async function startBot() {
           await sock.groupMetadata(from)
 
         const member =
-          meta.participants.find(
-            x => x.id === sender
-          )
+  meta.participants.find(
+    x =>
+      x.id.split(":")[0] === sender
+  )
 
-        const bot =
-          meta.participants.find(
-            x => x.id.includes(
-              sock.user.id.split(":")[0]
-            )
-          )
+const botNumber =
+  sock.user.id.split(":")[0]
 
-        isAdmin =
-          !!member?.admin
+const bot =
+  meta.participants.find(
+    x =>
+      x.id.split(":")[0] === botNumber
+  )
 
-        botAdmin =
-          !!bot?.admin
-      }
+isAdmin =
+  member?.admin === "admin" ||
+  member?.admin === "superadmin"
+
+botAdmin =
+  bot?.admin === "admin" ||
+  bot?.admin === "superadmin"
 
       // =========================
       // SESSION
@@ -470,28 +479,37 @@ ${format(data.expired)}`,
       }
 
       // =========================
-      // FILTER CHAT
-      // =========================
-      if (
-        settings.filterchat.length > 0
-      ) {
+// FILTER CHAT
+// =========================
+if (
+  settings.filterchat.length > 0 &&
+  isGroup &&
+  !isBotMessage
+) {
 
-        const bad =
-          settings.filterchat.find(
-            x =>
-              text.toLowerCase()
-              .includes(x.toLowerCase())
-          )
+  const bad =
+    settings.filterchat.find(
+      x =>
+        text.toLowerCase()
+        .includes(x.toLowerCase())
+    )
 
-        if (bad) {
+  if (bad) {
 
-          await sock.sendMessage(from, {
-            delete: msg.key
-          })
+    // admin & owner bebas
+    if (
+      isAdmin ||
+      sender.includes(OWNER_NUMBER)
+    ) return
 
-          return
-        }
-      }
+    // hapus pesan user
+    await sock.sendMessage(from, {
+      delete: msg.key
+    })
+
+    return
+  }
+}
 
       // =========================
       // ANTILINK
