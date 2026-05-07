@@ -264,43 +264,46 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // ambil nomor sender asli
+  // normalize sender
   const senderId =
-    (msg.key.participant || "")
+    (msg.key.participant || sender)
       .split(":")[0]
+      .replace("@s.whatsapp.net", "")
+      .replace("@lid", "")
 
-  // ambil nomor bot asli
+  // normalize bot
   const botId =
     sock.user.id
       .split(":")[0]
+      .replace("@s.whatsapp.net", "")
+      .replace("@lid", "")
 
-  // cari member
+  // cek member
   const member =
     meta.participants.find(x => {
 
       const id =
-        x.id.split(":")[0]
+        x.id
+          .split(":")[0]
+          .replace("@s.whatsapp.net", "")
+          .replace("@lid", "")
 
-      return (
-        id === senderId ||
-        x.id.includes(senderId)
-      )
+      return id.includes(senderId)
     })
 
-  // cari bot
+  // cek bot
   const bot =
     meta.participants.find(x => {
 
       const id =
-        x.id.split(":")[0]
+        x.id
+          .split(":")[0]
+          .replace("@s.whatsapp.net", "")
+          .replace("@lid", "")
 
-      return (
-        id === botId ||
-        x.id.includes(botId)
-      )
+      return id.includes(botId)
     })
 
-  // admin check
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
@@ -312,8 +315,6 @@ if (isGroup) {
   console.log({
     sender: senderId,
     bot: botId,
-    memberFound: !!member,
-    botFound: !!bot,
     isAdmin,
     botAdmin
   })
