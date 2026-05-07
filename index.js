@@ -107,7 +107,7 @@ function format(ms) {
 function isLink(text) {
 
   const regex =
-    /(https?:\/\/\S+|chat\.whatsapp\.com\/\S+|wa\.me\/\S+)/gi
+    /(https?:\/\/|chat\.whatsapp\.com|wa\.me)/gi
 
   return regex.test(text)
 }
@@ -252,10 +252,10 @@ async function startBot() {
           })
       }
 
-      // =========================
-      // ADMIN CHECK
-      // =========================
-      let isAdmin = false
+// =========================
+// ADMIN CHECK
+// =========================
+let isAdmin = false
 let botAdmin = false
 
 if (isGroup) {
@@ -263,21 +263,29 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
+  // normalize sender
   const senderId =
-    sender + "@s.whatsapp.net"
+    sender.includes("@s.whatsapp.net")
+      ? sender
+      : sender + "@s.whatsapp.net"
 
+  // normalize bot id
   const botId =
     sock.user.id.split(":")[0] +
     "@s.whatsapp.net"
 
   const member =
     meta.participants.find(
-      x => x.id === senderId
+      x =>
+        x.id === senderId ||
+        x.id.split(":")[0] + "@s.whatsapp.net" === senderId
     )
 
   const bot =
     meta.participants.find(
-      x => x.id === botId
+      x =>
+        x.id === botId ||
+        x.id.split(":")[0] + "@s.whatsapp.net" === botId
     )
 
   isAdmin =
@@ -287,8 +295,14 @@ if (isGroup) {
   botAdmin =
     bot?.admin === "admin" ||
     bot?.admin === "superadmin"
-}
 
+  console.log({
+    sender: senderId,
+    bot: botId,
+    isAdmin,
+    botAdmin
+  })
+}
       // =========================
       // SESSION
       // =========================
@@ -476,38 +490,29 @@ ${format(data.expired)}`,
         })
       }
 
-// =========================
-// FILTER CHAT
-// =========================
-if (
-  settings.filterchat.length > 0 &&
-  !command.startsWith(".filterchat")
-) {
+      // =========================
+      // FILTER CHAT
+      // =========================
+      if (
+        settings.filterchat.length > 0
+      ) {
 
-  const bad =
-    settings.filterchat.find(
-      x =>
-        text.toLowerCase()
-        .includes(x.toLowerCase())
-    )
+        const bad =
+          settings.filterchat.find(
+            x =>
+              text.toLowerCase()
+              .includes(x.toLowerCase())
+          )
 
-  if (bad) {
+        if (bad) {
 
-    if (botAdmin && isGroup) {
+          await sock.sendMessage(from, {
+            delete: msg.key
+          })
 
-      await sock.sendMessage(from, {
-        delete: {
-          remoteJid: from,
-          fromMe: false,
-          id: msg.key.id,
-          participant: sender
+          return
         }
-      })
-    }
-
-    return
-  }
-}
+      }
 
       // =========================
       // ANTILINK
@@ -544,13 +549,8 @@ if (
 
         // delete pesan
         await sock.sendMessage(from, {
-  delete: {
-    remoteJid: from,
-    fromMe: false,
-    id: msg.key.id,
-    participant: sender
-  }
-})
+          delete: msg.key
+        })
 
         // kick
         if (
