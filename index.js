@@ -217,9 +217,12 @@ async function startBot() {
 
       const from = msg.key.remoteJid
 
-      const sender =
-        (msg.key.participant || from)
-        .split(":")[0]
+const sender =
+  (
+    msg.key.participant ||
+    msg.participant ||
+    from
+  ).split(":")[0]
 
       const text =
         msg.message.conversation ||
@@ -977,7 +980,8 @@ if (command === ".kick") {
 
   if (quoted) {
 
-    target = quoted
+    target =
+  quoted.split(":")[0]
   }
 
   // INPUT NOMOR
@@ -1001,34 +1005,41 @@ atau reply pesan member`
       "@s.whatsapp.net"
   }
 
-  try {
+try {
 
-    await sock.groupParticipantsUpdate(
-      from,
-      [target],
-      "remove"
-    )
+  if (
+    !target.includes("@s.whatsapp.net")
+  ) {
 
-    return sock.sendMessage(from, {
-      text:
+    target =
+      target + "@s.whatsapp.net"
+  }
+
+  await sock.groupParticipantsUpdate(
+    from,
+    [target],
+    "remove"
+  )
+
+  return sock.sendMessage(from, {
+    text:
 `✅ Member berhasil dikick
 
 @${target.split("@")[0]}`,
-      mentions: [target]
-    })
+    mentions: [target]
+  })
 
-  } catch (err) {
+} catch (err) {
 
-    return sock.sendMessage(from, {
-      text:
+  return sock.sendMessage(from, {
+    text:
 `❌ Gagal kick member
 
 Kemungkinan:
 - Target admin
 - Nomor tidak ada
 - Bot bukan admin`
-    })
-  }
+  })
 }
 
       // =========================
