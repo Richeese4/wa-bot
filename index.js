@@ -184,7 +184,9 @@ async function startBot() {
           })
         }
 
-        const data = await User.findOne({ key })
+        const data = await User.findOne({
+  key: key.trim().toUpperCase()
+})
 
         if (!data || Date.now() > data.expired) {
           return sock.sendMessage(from, {
@@ -260,8 +262,7 @@ async function startBot() {
 `👑 OWNER MENU
 .genkey <jam>
 .genkeyp <jam>
-.panel
-.masaaktif`
+.panel`
           })
         }
 
@@ -309,25 +310,52 @@ async function startBot() {
       // =========================
       // GENKEY OWNER
       // =========================
-      if (cmd.startsWith(".genkey")) {
+// =========================
+// GENKEY OWNER
+// =========================
+if (cmd.startsWith(".genkey")) {
 
-        if (role !== "owner") return
+  if (role !== "owner") return
 
-        const jam = parseInt(cmd.split(" ")[1]) || 1
-        const key = "KEY-" + Math.random().toString(36).slice(2, 10)
-        const exp = Date.now() + jam * 86400000
+  // contoh:
+  // .genkey 1  => 1 hari
+  // .genkey 7  => 7 hari
+  // .genkey 30 => 30 hari
 
-        await User.create({
-          key,
-          role: "user",
-          expired: exp,
-          createdAt: Date.now()
-        })
+  const hari = parseInt(cmd.split(" ")[1])
 
-        return sock.sendMessage(from, {
-          text: `KEY:\n${key}\nExpired: ${format(exp)}`
-        })
-      }
+  if (!hari || hari < 1) {
+    return sock.sendMessage(from, {
+      text: "Contoh:\n.genkey 1\n.genkey 7\n.genkey 30"
+    })
+  }
+
+  const key = "KEY-" + Math.random().toString(36).slice(2, 10).toUpperCase()
+
+  // FIX PERHITUNGAN EXPIRED
+  const exp = Date.now() + (hari * 24 * 60 * 60 * 1000)
+
+  await User.create({
+    key: key,
+    role: "user",
+    expired: exp,
+    createdAt: Date.now()
+  })
+
+  return sock.sendMessage(from, {
+    text:
+`✅ KEY BERHASIL DIGENERATE
+
+🔑 Key:
+${key}
+
+⏳ Masa Aktif:
+${hari} Hari
+
+📅 Expired:
+${format(exp)}`
+  })
+}
 
       // =========================
       // PANEL
