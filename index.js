@@ -42,7 +42,6 @@ const User = mongoose.model("User", new mongoose.Schema({
   createdAt: Number
 }))
 
-// LOGIN PER GROUP
 const Session = mongoose.model("Session", new mongoose.Schema({
   group: String,
   admin: String,
@@ -61,12 +60,19 @@ app.get("/", (_, res) => {
   res.send("BOT ACTIVE")
 })
 
-app.listen(3000)
+app.listen(3000, () => {
+  console.log("Express Running")
+})
 
 // =========================
 // FORMAT WAKTU
 // =========================
 function format(ms) {
+
+  if (!ms || ms === 9999999999999) {
+    return "Permanent"
+  }
+
   return new Date(ms).toLocaleString("id-ID", {
     timeZone: "Asia/Jakarta"
   })
@@ -85,7 +91,9 @@ async function startBot() {
 
   const sock = makeWASocket({
     version,
-    logger: P({ level: "silent" }),
+    logger: P({
+      level: "silent"
+    }),
     auth: state
   })
 
@@ -112,11 +120,13 @@ async function startBot() {
 
     if (connection === "close") {
 
-      const reconnect =
+      const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !==
         DisconnectReason.loggedOut
 
-      if (reconnect) {
+      console.log("Connection Closed")
+
+      if (shouldReconnect) {
         startBot()
       }
     }
@@ -136,7 +146,7 @@ async function startBot() {
 
           await sock.sendMessage(m.id, {
             image: fs.readFileSync("./welcome.jpg"),
-            caption: 👋 Welcome @${p.split("@")[0]},
+            caption: `👋 Welcome @${p.split("@")[0]}`,
             mentions: [p]
           })
         }
@@ -149,7 +159,7 @@ async function startBot() {
 
           await sock.sendMessage(m.id, {
             image: fs.readFileSync("./keluar.jpg"),
-            caption: 👋 @${p.split("@")[0]} keluar,
+            caption: `👋 @${p.split("@")[0]} keluar`,
             mentions: [p]
           })
         }
@@ -170,25 +180,36 @@ async function startBot() {
       const msg = messages[0]
       if (!msg.message) return
 
+      // skip status
+      if (msg.key.remoteJid === "status@broadcast") return
+
       const from = msg.key.remoteJid
 
       const sender =
-        (msg.key.participant || from).split(":")[0]
+        (msg.key.participant || from)
+        .split(":")[0]
 
       const text =
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
         ""
 
-      const cmd = text.toLowerCase().trim()
+      if (!text) return
 
-      const isGroup = from.endsWith("@g.us")
+      const cmd = text.trim()
+      const command =
+        cmd.split(" ")[0].toLowerCase()
+
+      const isGroup =
+        from.endsWith("@g.us")
 
       // =========================
-      // SESSION GROUP
+      // SESSION
       // =========================
       let session = isGroup
-        ? await Session.findOne({ group: from })
+        ? await Session.findOne({
+            group: from
+          })
         : null
 
       // =========================
@@ -196,32 +217,44 @@ async function startBot() {
       // =========================
       if (
         !session &&
-        cmd.startsWith(".") &&
-        !cmd.startsWith(".login")
+        command.startsWith(".") &&
+        command !== ".login"
       ) {
 
         return sock.sendMessage(from, {
           text:
 `❌ Admin group belum login
 
-Silahkan admin group login:
+Silahkan login:
 .login key`
         })
       }
 
       // =========================
-      // LOGIN SYSTEM
+      // LOGIN
       // =========================
-      if (cmd.startsWith(".login")) {
+      if (command === ".login") {
 
-        // wajib group
         if (!isGroup) {
+
           return sock.sendMessage(from, {
-            text: "❌ Login hanya bisa di group"
+            text:
+              "❌ Login hanya di group"
           })
         }
 
-        // cek admin
+        const inputKey =
+          cmd.split(" ")[1]
+
+        if (!inputKey) {
+
+          return sock.sendMessage(from, {
+            text:
+`Contoh:
+.login KEY-XXXX`
+          })
+        }
+
         const meta =
           await sock.groupMetadata(from)
 
@@ -231,11 +264,7 @@ Silahkan admin group login:
           )
 
         const isAdmin =
-          member?.admin ? true : false
-
-        // owner bypass
-        const inputKey =
-          cmd.split(" ")[1]
+          !!member?.admin
 
         const isOwner =
           inputKey === OWNER_KEY
@@ -244,14 +273,12 @@ Silahkan admin group login:
 
           return sock.sendMessage(from, {
             text:
-              "❌ Hanya admin group yang bisa login"
+              "❌ Hanya admin group"
           })
         }
 
-        // =========================
         // OWNER LOGIN
-        // =========================
-        if (inputKey === OWNER_KEY) {
+        if (isOwner) {
 
           await Session.findOneAndUpdate(
             { group: from },
@@ -260,7 +287,7 @@ Silahkan admin group login:
               admin: sender,
               role: "owner",
               key: inputKey,
-              expired: Infinity,
+              expired: 9999999999999,
               loginAt: Date.now()
             },
             { upsert: true }
@@ -270,13 +297,11 @@ Silahkan admin group login:
             text:
 `👑 OWNER LOGIN SUCCESS
 
-✅ Bot aktif untuk group ini`
+✅ Bot aktif`
           })
         }
 
-        // =========================
         // USER LOGIN
-        // =========================
         const data =
           await User.findOne({
             key: inputKey
@@ -316,9 +341,7 @@ Silahkan admin group login:
 @${sender.split("@")[0]}
 
 📅 Expired:
-${format(data.expired)}
-
-✅ Bot aktif untuk group ini`,
+${format(data.expired)}`,
           mentions: [sender]
         })
       }
@@ -326,24 +349,20 @@ ${format(data.expired)}
       // =========================
       // REFRESH SESSION
       // =========================
-      session =
-        await Session.findOne({
-          group: from
-        })
+      session = await Session.findOne({
+        group: from
+      })
 
       if (!session) return
 
-      // =========================
-      // ROLE
-      // =========================
       const currentRole =
         session.role || "user"
 
       // =========================
-      // EXPIRED CHECK
+      // EXPIRED
       // =========================
       if (
-        session.expired !== Infinity &&
+        session.expired !== 9999999999999 &&
         Date.now() > session.expired
       ) {
 
@@ -352,14 +371,15 @@ ${format(data.expired)}
         })
 
         return sock.sendMessage(from, {
-          text: "❌ Session expired"
+          text:
+            "❌ Session expired"
         })
       }
 
       // =========================
       // MENU
       // =========================
-      if (cmd === ".menu") {
+      if (command === ".menu") {
 
         // OWNER
         if (currentRole === "owner") {
@@ -369,7 +389,7 @@ ${format(data.expired)}
 `👑 OWNER MENU
 
 .genkey <hari>
-.genkeyp <hari>
+.genprem <hari>
 .panel
 
 .linkgroup
@@ -385,9 +405,7 @@ ${format(data.expired)}
 `⭐ PREMIUM MENU
 
 .linkgroup
-.sticker
-.filterchat
-.autokick`
+.sticker`
           })
         }
 
@@ -414,10 +432,8 @@ ${format(data.expired)}
 
       if (
         currentRole === "user" &&
-        cmd.startsWith(".") &&
-        !userLimit.includes(
-          cmd.split(" ")[0]
-        )
+        command.startsWith(".") &&
+        !userLimit.includes(command)
       ) {
 
         return sock.sendMessage(from, {
@@ -429,9 +445,7 @@ ${format(data.expired)}
       // =========================
       // LINK GROUP
       // =========================
-      if (cmd === ".linkgroup") {
-
-        if (!isGroup) return
+      if (command === ".linkgroup") {
 
         const code =
           await sock.groupInviteCode(from)
@@ -445,35 +459,32 @@ ${format(data.expired)}
       // =========================
       // STICKER
       // =========================
-      if (cmd === ".sticker") {
+      if (command === ".sticker") {
 
         return sock.sendMessage(from, {
-          text: "Sticker system aktif"
+          text:
+            "✅ Sticker system aktif"
         })
       }
 
       // =========================
       // MASAAKTIF
       // =========================
-      if (cmd === ".masaaktif") {
+      if (command === ".masaaktif") {
 
         return sock.sendMessage(from, {
           text:
 `📅 MASA AKTIF BOT
 
 Expired:
-${format(session.expired)}
-
-Menu:
-.perpanjang
-.premium`
+${format(session.expired)}`
         })
       }
 
       // =========================
-      // GENKEY OWNER
+      // GENKEY USER
       // =========================
-      if (cmd.startsWith(".genkey")) {
+      if (command === ".genkey") {
 
         if (currentRole !== "owner")
           return
@@ -481,36 +492,31 @@ Menu:
         const hari =
           parseInt(cmd.split(" ")[1])
 
-        if (!hari || hari < 1) {
+        if (!hari) {
 
           return sock.sendMessage(from, {
             text:
 `Contoh:
-.genkey 1
-.genkey 7
-.genkey 30`
+.genkey 7`
           })
         }
 
         const key =
           "KEY-" +
           Math.random()
-            .toString(36)
-            .slice(2, 10)
-            .toUpperCase()
+          .toString(36)
+          .slice(2, 10)
+          .toUpperCase()
 
         const exp =
           Date.now() +
           (
             hari *
-            24 *
-            60 *
-            60 *
-            1000
+            86400000
           )
 
         await User.create({
-          key: key,
+          key,
           role: "user",
           expired: exp,
           createdAt: Date.now()
@@ -518,23 +524,71 @@ Menu:
 
         return sock.sendMessage(from, {
           text:
-`✅ KEY BERHASIL DIGENERATE
+`✅ USER KEY
 
-🔑 Key:
-${key}
+🔑 ${key}
 
-⏳ Masa Aktif:
-${hari} Hari
+⏳ ${hari} Hari
+📅 ${format(exp)}`
+        })
+      }
 
-📅 Expired:
-${format(exp)}`
+      // =========================
+      // GENKEY PREMIUM
+      // =========================
+      if (command === ".genprem") {
+
+        if (currentRole !== "owner")
+          return
+
+        const hari =
+          parseInt(cmd.split(" ")[1])
+
+        if (!hari) {
+
+          return sock.sendMessage(from, {
+            text:
+`Contoh:
+.genprem 30`
+          })
+        }
+
+        const key =
+          "PREM-" +
+          Math.random()
+          .toString(36)
+          .slice(2, 10)
+          .toUpperCase()
+
+        const exp =
+          Date.now() +
+          (
+            hari *
+            86400000
+          )
+
+        await User.create({
+          key,
+          role: "premium",
+          expired: exp,
+          createdAt: Date.now()
+        })
+
+        return sock.sendMessage(from, {
+          text:
+`⭐ PREMIUM KEY
+
+🔑 ${key}
+
+⏳ ${hari} Hari
+📅 ${format(exp)}`
         })
       }
 
       // =========================
       // PANEL
       // =========================
-      if (cmd === ".panel") {
+      if (command === ".panel") {
 
         if (currentRole !== "owner")
           return
@@ -542,12 +596,12 @@ ${format(exp)}`
         const all =
           await User.find()
 
-        let t =
+        let txt =
           "📌 ACTIVE KEYS\n\n"
 
         all.forEach((x, i) => {
 
-          t +=
+          txt +=
 `${i + 1}. ${x.key}
 Role: ${x.role}
 Expired: ${format(x.expired)}
@@ -556,7 +610,7 @@ Expired: ${format(x.expired)}
         })
 
         return sock.sendMessage(from, {
-          text: t
+          text: txt
         })
       }
 
