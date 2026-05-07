@@ -15,15 +15,18 @@ const {
 // CONFIG
 // =========================
 const OWNER_KEY = "freewilly123"
+const OWNER_NUMBER = "6282162625200"
 
 // =========================
-// MONGO FIX
+// MONGO CONNECT SAFE
 // =========================
-mongoose.connect("mongodb+srv://USER:PASS@cluster0.mongodb.net/bot?retryWrites=true&w=majority")
-  .then(() => console.log("MongoDB Connected"))
-  .catch(console.error)
+mongoose.connect("mongodb+srv://USER:PASS@cluster0.mongodb.net/bot")
+mongoose.connection.on("error", e => console.log("MongoDB ERROR:", e))
+mongoose.connection.once("open", () => console.log("MongoDB CONNECTED"))
 
-// USER DATABASE
+// =========================
+// SCHEMA
+// =========================
 const User = mongoose.model("User", new mongoose.Schema({
   key: String,
   role: { type: String, default: "user" },
@@ -31,13 +34,13 @@ const User = mongoose.model("User", new mongoose.Schema({
   createdAt: Number
 }))
 
-// SESSION DATABASE (LOGIN PERMANEN)
 const Session = mongoose.model("Session", new mongoose.Schema({
   jid: String,
-  key: String,
   role: String,
+  key: String,
   expired: Number,
-  loginAt: Number
+  loginAt: Number,
+  groupAdmin: { type: Boolean, default: false }
 }))
 
 // =========================
@@ -50,13 +53,14 @@ app.listen(3000)
 // =========================
 // FORMAT TIME
 // =========================
-const format = (ms) =>
-  new Date(ms).toLocaleString("id-ID", {
+function format(ms) {
+  return new Date(ms).toLocaleString("id-ID", {
     timeZone: "Asia/Jakarta"
   })
+}
 
 // =========================
-// START BOT
+// BOT START
 // =========================
 async function startBot() {
 
@@ -72,29 +76,27 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // =========================
-  // CONNECTION FIX
+  // CONNECTION FIX AUTO RECONNECT
   // =========================
   sock.ev.on("connection.update", ({ connection, qr, lastDisconnect }) => {
 
     if (qr) qrcode.generate(qr, { small: true })
 
-    if (connection === "open") {
-      console.log("BOT ONLINE")
-    }
+    if (connection === "open") console.log("BOT ONLINE")
 
     if (connection === "close") {
       const reconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-
       if (reconnect) startBot()
     }
   })
 
   // =========================
-  // WELCOME / LEAVE
+  // WELCOME / LEAVE (NO LOGIN REQUIRED)
   // =========================
   sock.ev.on("group-participants.update", async (m) => {
     try {
+
       if (m.action === "add") {
         for (let p of m.participants) {
           await sock.sendMessage(m.id, {
@@ -114,6 +116,7 @@ async function startBot() {
           })
         }
       }
+
     } catch {}
   })
 
@@ -126,9 +129,7 @@ async function startBot() {
     if (!msg.message) return
 
     const from = msg.key.remoteJid
-
-    // FIX SENDER (INI YANG BIKIN LOGIN BUG SEBELUMNYA)
-    const sender = msg.key.participant || msg.key.remoteJid
+    const sender = (msg.key.participant || from).split(":")[0]
 
     const text =
       msg.message.conversation ||
@@ -139,12 +140,12 @@ async function startBot() {
     const isGroup = from.endsWith("@g.us")
 
     // =========================
-    // LOAD SESSION (IMPORTANT FIX)
+    // LOAD SESSION (PERSISTENT LOGIN)
     // =========================
     let session = await Session.findOne({ jid: sender })
 
     // =========================
-    // BLOCK BEFORE LOGIN
+    // BLOCK IF NOT LOGIN
     // =========================
     if (!session && cmd.startsWith(".") && !cmd.startsWith(".login")) {
       return sock.sendMessage(from, {
@@ -166,8 +167,8 @@ async function startBot() {
           { jid: sender },
           {
             jid: sender,
-            key,
             role: "owner",
+            key,
             expired: Infinity,
             loginAt: Date.now()
           },
@@ -175,7 +176,7 @@ async function startBot() {
         )
 
         return sock.sendMessage(from, {
-          text: "✅ OWNER LOGIN BERHASIL"
+          text: "👑 OWNER LOGIN SUCCESS"
         })
       }
 
@@ -192,8 +193,8 @@ async function startBot() {
         { jid: sender },
         {
           jid: sender,
+          role: data.role || "user",
           key,
-          role: data.role,
           expired: data.expired,
           loginAt: Date.now()
         },
@@ -209,29 +210,24 @@ async function startBot() {
     session = await Session.findOne({ jid: sender })
 
     // =========================
-    // AUTO EXPIRED CHECK
+    // AUTO EXPIRED
     // =========================
     if (session && session.expired !== Infinity && Date.now() > session.expired) {
       await Session.deleteOne({ jid: sender })
 
       return sock.sendMessage(from, {
-        text: "❌ Session expired"
+        text: "❌ Session expired, login ulang"
       })
     }
 
     // =========================
-    // MENU
+    // LIMIT USER COMMAND
     // =========================
-    if (cmd === ".menu") {
+    const allowedUser = [".linkgroup", ".sticker"]
 
-      if (session.role === "owner") {
-        return sock.sendMessage(from, {
-          text: ".genkey 24\n.panel"
-        })
-      }
-
+    if (session.role === "user" && !allowedUser.includes(cmd.split(" ")[0]) && cmd.startsWith(".")) {
       return sock.sendMessage(from, {
-        text: ".linkgroup\n.sticker\n.premium"
+        text: "❌ Akses terbatas (user)"
       })
     }
 
@@ -249,6 +245,15 @@ async function startBot() {
     }
 
     // =========================
+    // STICKER (PLACEHOLDER)
+    // =========================
+    if (cmd === ".sticker") {
+      return sock.sendMessage(from, {
+        text: "Sticker system butuh ffmpeg"
+      })
+    }
+
+    // =========================
     // GENKEY OWNER
     // =========================
     if (cmd.startsWith(".genkey")) {
@@ -256,8 +261,8 @@ async function startBot() {
       if (session.role !== "owner") return
 
       const jam = parseInt(cmd.split(" ")[1]) || 1
-      const key = "KEY-" + Math.random().toString(36).substring(2, 10)
 
+      const key = "KEY-" + Math.random().toString(36).slice(2, 10)
       const exp = Date.now() + jam * 86400000
 
       await User.create({
@@ -268,12 +273,12 @@ async function startBot() {
       })
 
       return sock.sendMessage(from, {
-        text: `KEY CREATED\n${key}\nExpired: ${format(exp)}`
+        text: `KEY GENERATED:\n${key}\nExpired: ${format(exp)}`
       })
     }
 
     // =========================
-    // PANEL
+    // PANEL OWNER
     // =========================
     if (cmd === ".panel") {
 
