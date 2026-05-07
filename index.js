@@ -215,11 +215,11 @@ async function startBot() {
       if (msg.key.remoteJid === "status@broadcast")
         return
 
-      const from = msg.key.remoteJid
+  const participant =
+  msg.key.participant || ""
 
       const sender =
-        (msg.key.participant || from)
-        .split(":")[0]
+  participant || from
 
       const text =
         msg.message.conversation ||
@@ -263,31 +263,43 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // normalize sender
+  // ambil nomor sender asli
   const senderId =
-    sender.includes("@s.whatsapp.net")
-      ? sender
-      : sender + "@s.whatsapp.net"
+    (msg.key.participant || "")
+      .split(":")[0]
 
-  // normalize bot id
+  // ambil nomor bot asli
   const botId =
-    sock.user.id.split(":")[0] +
-    "@s.whatsapp.net"
+    sock.user.id
+      .split(":")[0]
 
+  // cari member
   const member =
-    meta.participants.find(
-      x =>
-        x.id === senderId ||
-        x.id.split(":")[0] + "@s.whatsapp.net" === senderId
-    )
+    meta.participants.find(x => {
 
+      const id =
+        x.id.split(":")[0]
+
+      return (
+        id === senderId ||
+        x.id.includes(senderId)
+      )
+    })
+
+  // cari bot
   const bot =
-    meta.participants.find(
-      x =>
-        x.id === botId ||
-        x.id.split(":")[0] + "@s.whatsapp.net" === botId
-    )
+    meta.participants.find(x => {
 
+      const id =
+        x.id.split(":")[0]
+
+      return (
+        id === botId ||
+        x.id.includes(botId)
+      )
+    })
+
+  // admin check
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
@@ -299,6 +311,8 @@ if (isGroup) {
   console.log({
     sender: senderId,
     bot: botId,
+    memberFound: !!member,
+    botFound: !!bot,
     isAdmin,
     botAdmin
   })
