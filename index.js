@@ -113,6 +113,27 @@ function isLink(text) {
 }
 
 // =========================
+// DELETE MESSAGE
+// =========================
+async function deleteMsg(sock, from, msg) {
+
+  try {
+
+    await sock.sendMessage(from, {
+      delete: {
+        remoteJid: from,
+        fromMe: false,
+        id: msg.key.id,
+        participant: msg.key.participant
+      }
+    })
+
+  } catch (e) {
+    console.log("DELETE ERROR:", e.message)
+  }
+}
+
+// =========================
 // START BOT
 // =========================
 async function startBot() {
@@ -171,7 +192,6 @@ async function startBot() {
 
     try {
 
-      // MEMBER MASUK
       if (m.action === "add") {
 
         for (let p of m.participants) {
@@ -184,7 +204,6 @@ async function startBot() {
         }
       }
 
-      // MEMBER KELUAR
       if (m.action === "remove") {
 
         for (let p of m.participants) {
@@ -210,6 +229,7 @@ async function startBot() {
     try {
 
       const msg = messages[0]
+
       if (!msg.message) return
 
       if (msg.key.remoteJid === "status@broadcast")
@@ -218,18 +238,15 @@ async function startBot() {
       const from = msg.key.remoteJid
 
       const sender =
-  (msg.key.participant || from)
-  .split(":")[0]
+        (msg.key.participant || from)
+        .split(":")[0]
 
-const text =
-  msg.message.conversation ||
-  msg.message.extendedTextMessage?.text ||
-  msg.message.imageMessage?.caption ||
-  msg.message.videoMessage?.caption ||
-  ""
-
-const isBotMessage =
-  msg.key.fromMe
+      const text =
+        msg.message.conversation ||
+        msg.message.extendedTextMessage?.text ||
+        msg.message.imageMessage?.caption ||
+        msg.message.videoMessage?.caption ||
+        ""
 
       if (!text) return
 
@@ -269,29 +286,28 @@ const isBotMessage =
           await sock.groupMetadata(from)
 
         const member =
-  meta.participants.find(
-    x =>
-      x.id.split(":")[0] === sender
-  )
+          meta.participants.find(
+            x =>
+              x.id.split(":")[0] === sender
+          )
 
-const botNumber =
-  sock.user.id.split(":")[0]
+        const botNumber =
+          sock.user.id.split(":")[0]
 
-const bot =
-  meta.participants.find(
-    x =>
-      x.id.split(":")[0] === botNumber
-  )
+        const bot =
+          meta.participants.find(
+            x =>
+              x.id.split(":")[0] === botNumber
+          )
 
-isAdmin =
-  member?.admin === "admin" ||
-  member?.admin === "superadmin"
+        isAdmin =
+          member?.admin === "admin" ||
+          member?.admin === "superadmin"
 
-botAdmin =
-  bot?.admin === "admin" ||
-  bot?.admin === "superadmin"
-
-        }
+        botAdmin =
+          bot?.admin === "admin" ||
+          bot?.admin === "superadmin"
+      }
 
       // =========================
       // SESSION
@@ -481,37 +497,36 @@ ${format(data.expired)}`,
       }
 
       // =========================
-// FILTER CHAT
-// =========================
-if (
-  settings.filterchat.length > 0 &&
-  isGroup &&
-  !isBotMessage
-) {
+      // FILTER CHAT
+      // =========================
+      if (
+        settings.filterchat.length > 0 &&
+        isGroup
+      ) {
 
-  const bad =
-    settings.filterchat.find(
-      x =>
-        text.toLowerCase()
-        .includes(x.toLowerCase())
-    )
+        const bad =
+          settings.filterchat.find(
+            x =>
+              text.toLowerCase()
+              .includes(x.toLowerCase())
+          )
 
-  if (bad) {
+        if (bad) {
 
-    // admin & owner bebas
-    if (
-      isAdmin ||
-      sender.includes(OWNER_NUMBER)
-    ) return
+          if (
+            isAdmin ||
+            sender.includes(OWNER_NUMBER)
+          ) return
 
-    // hapus pesan user
-    await sock.sendMessage(from, {
-      delete: msg.key
-    })
+          await deleteMsg(
+            sock,
+            from,
+            msg
+          )
 
-    return
-  }
-}
+          return
+        }
+      }
 
       // =========================
       // ANTILINK
@@ -546,12 +561,14 @@ if (
           settings.maxwarn -
           warns[sender]
 
-        // delete pesan
-        await sock.sendMessage(from, {
-          delete: msg.key
-        })
+        // DELETE PESAN
+        await deleteMsg(
+          sock,
+          from,
+          msg
+        )
 
-        // kick
+        // KICK
         if (
           warns[sender] >=
           settings.maxwarn
@@ -594,7 +611,6 @@ Sisa warning: ${left}`,
       // =========================
       if (command === ".menu") {
 
-        // OWNER
         if (currentRole === "owner") {
 
           return sock.sendMessage(from, {
@@ -624,7 +640,6 @@ Sisa warning: ${left}`,
           })
         }
 
-        // PREMIUM
         if (currentRole === "premium") {
 
           return sock.sendMessage(from, {
@@ -645,7 +660,6 @@ Sisa warning: ${left}`,
           })
         }
 
-        // USER
         return sock.sendMessage(from, {
           text:
 `📌 USER MENU
@@ -658,7 +672,7 @@ Sisa warning: ${left}`,
       }
 
       // =========================
-      // OWNER MENU
+      // OWNER
       // =========================
       if (command === ".owner") {
 
@@ -728,7 +742,7 @@ wa.me/${OWNER_NUMBER}`
         }
 
         const value =
-          cmd.split(" ")[1]
+          cmd.split(" ")[1]?.toLowerCase()
 
         if (
           !["on", "off"]
@@ -800,7 +814,7 @@ ${jumlah} warning`
       }
 
       // =========================
-      // FILTER CHAT
+      // FILTERCHAT
       // =========================
       if (command === ".filterchat") {
 
@@ -817,15 +831,19 @@ ${jumlah} warning`
           })
         }
 
+        const args =
+          cmd.split(" ")
+
         const action =
-          cmd.split(" ")[1]
+          args[1]?.toLowerCase()
 
         const word =
-          cmd.split(" ")
+          args
           .slice(2)
           .join(" ")
+          .toLowerCase()
 
-        if (!action) {
+        if (!action || !word) {
 
           return sock.sendMessage(from, {
             text:
@@ -837,22 +855,25 @@ ${jumlah} warning`
         // ADD
         if (action === "add") {
 
-          if (!word) return
-
           if (
-            !settings.filterchat
+            settings.filterchat
             .includes(word)
           ) {
 
-            settings.filterchat
-            .push(word)
-
-            await settings.save()
+            return sock.sendMessage(from, {
+              text:
+                "❌ Kata sudah ada"
+            })
           }
+
+          settings.filterchat.push(word)
+
+          await settings.save()
 
           return sock.sendMessage(from, {
             text:
-`✅ Ditambahkan:
+`✅ Filter ditambahkan
+
 ${word}`
           })
         }
@@ -860,16 +881,32 @@ ${word}`
         // DELETE
         if (action === "del") {
 
+          const before =
+            settings.filterchat.length
+
           settings.filterchat =
             settings.filterchat.filter(
-              x => x !== word
+              x =>
+                x.toLowerCase() !== word
             )
 
           await settings.save()
 
+          if (
+            before ===
+            settings.filterchat.length
+          ) {
+
+            return sock.sendMessage(from, {
+              text:
+                "❌ Kata tidak ditemukan"
+            })
+          }
+
           return sock.sendMessage(from, {
             text:
-`✅ Dihapus:
+`✅ Filter dihapus
+
 ${word}`
           })
         }
@@ -903,7 +940,7 @@ ${word}`
 
         let target
 
-        // reply
+        // REPLY
         if (
           msg.message
           .extendedTextMessage
@@ -918,7 +955,7 @@ ${word}`
             .participant
         }
 
-        // nomor
+        // NOMOR
         else {
 
           const nomor =
@@ -951,9 +988,11 @@ ${word}`
       }
 
       // =========================
-      // LINK GROUP
+      // LINKGROUP
       // =========================
       if (command === ".linkgroup") {
+
+        if (!isGroup) return
 
         const code =
           await sock.groupInviteCode(from)
@@ -1043,7 +1082,7 @@ ${format(session.expired)}`
       }
 
       // =========================
-      // GENKEY PREMIUM
+      // GENPREM
       // =========================
       if (command === ".genprem") {
 
