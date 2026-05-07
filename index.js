@@ -15,32 +15,33 @@ const {
 // CONFIG
 // =========================
 const OWNER_KEY = "freewilly123"
-const OWNER_NUMBER = "6282162625200"
 
 // =========================
-// MONGO CONNECT FIX
+// MONGO FIX
 // =========================
 mongoose.connect("mongodb+srv://USER:PASS@cluster0.mongodb.net/bot?retryWrites=true&w=majority")
+  .then(() => console.log("MongoDB Connected"))
+  .catch(console.error)
 
+// USER DATABASE
 const User = mongoose.model("User", new mongoose.Schema({
   key: String,
-  role: String,
+  role: { type: String, default: "user" },
   expired: Number,
-  createdAt: Number,
-  loginAt: Number
+  createdAt: Number
 }))
 
+// SESSION DATABASE (LOGIN PERMANEN)
 const Session = mongoose.model("Session", new mongoose.Schema({
   jid: String,
   key: String,
   role: String,
   expired: Number,
-  groupAdmin: Boolean,
   loginAt: Number
 }))
 
 // =========================
-// EXPRESS KEEP ALIVE
+// EXPRESS
 // =========================
 const app = express()
 app.get("/", (_, res) => res.send("BOT ACTIVE"))
@@ -49,14 +50,13 @@ app.listen(3000)
 // =========================
 // FORMAT TIME
 // =========================
-function formatTime(ms) {
-  return new Date(ms).toLocaleString("id-ID", {
+const format = (ms) =>
+  new Date(ms).toLocaleString("id-ID", {
     timeZone: "Asia/Jakarta"
   })
-}
 
 // =========================
-// BOT START
+// START BOT
 // =========================
 async function startBot() {
 
@@ -78,17 +78,20 @@ async function startBot() {
 
     if (qr) qrcode.generate(qr, { small: true })
 
-    if (connection === "open") console.log("BOT ONLINE")
+    if (connection === "open") {
+      console.log("BOT ONLINE")
+    }
 
     if (connection === "close") {
       const reconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+
       if (reconnect) startBot()
     }
   })
 
   // =========================
-  // GROUP WELCOME / LEAVE (NO LOGIN REQUIRED)
+  // WELCOME / LEAVE
   // =========================
   sock.ev.on("group-participants.update", async (m) => {
     try {
@@ -124,8 +127,8 @@ async function startBot() {
 
     const from = msg.key.remoteJid
 
-    // FIX IMPORTANT (ANTI BUG LOGIN GAGAL)
-    const sender = (msg.key.participant || msg.key.remoteJid).split(":")[0]
+    // FIX SENDER (INI YANG BIKIN LOGIN BUG SEBELUMNYA)
+    const sender = msg.key.participant || msg.key.remoteJid
 
     const text =
       msg.message.conversation ||
@@ -133,16 +136,15 @@ async function startBot() {
       ""
 
     const cmd = text.toLowerCase().trim()
-
     const isGroup = from.endsWith("@g.us")
 
     // =========================
-    // LOAD SESSION (MONGO PERSIST)
+    // LOAD SESSION (IMPORTANT FIX)
     // =========================
     let session = await Session.findOne({ jid: sender })
 
     // =========================
-    // BLOCK IF NOT LOGIN
+    // BLOCK BEFORE LOGIN
     // =========================
     if (!session && cmd.startsWith(".") && !cmd.startsWith(".login")) {
       return sock.sendMessage(from, {
@@ -173,7 +175,7 @@ async function startBot() {
         )
 
         return sock.sendMessage(from, {
-          text: "✅ OWNER LOGIN SUCCESS"
+          text: "✅ OWNER LOGIN BERHASIL"
         })
       }
 
@@ -191,7 +193,7 @@ async function startBot() {
         {
           jid: sender,
           key,
-          role: data.role || "user",
+          role: data.role,
           expired: data.expired,
           loginAt: Date.now()
         },
@@ -199,7 +201,7 @@ async function startBot() {
       )
 
       return sock.sendMessage(from, {
-        text: `✅ LOGIN SUCCESS\nExpired: ${formatTime(data.expired)}`
+        text: `✅ LOGIN SUCCESS\nExpired: ${format(data.expired)}`
       })
     }
 
@@ -207,13 +209,13 @@ async function startBot() {
     session = await Session.findOne({ jid: sender })
 
     // =========================
-    // EXPIRED CHECK
+    // AUTO EXPIRED CHECK
     // =========================
     if (session && session.expired !== Infinity && Date.now() > session.expired) {
       await Session.deleteOne({ jid: sender })
 
       return sock.sendMessage(from, {
-        text: "❌ Session expired, login ulang"
+        text: "❌ Session expired"
       })
     }
 
@@ -224,18 +226,12 @@ async function startBot() {
 
       if (session.role === "owner") {
         return sock.sendMessage(from, {
-          text: ".genkey 24\n.genkeyp 24\n.panel"
+          text: ".genkey 24\n.panel"
         })
       }
 
       return sock.sendMessage(from, {
-        text:
-`📌 MENU USER
-.linkgroup
-.sticker
-.owner
-.premium
-.masaaktif`
+        text: ".linkgroup\n.sticker\n.premium"
       })
     }
 
@@ -244,6 +240,7 @@ async function startBot() {
     // =========================
     if (cmd === ".linkgroup") {
       if (!isGroup) return
+
       const code = await sock.groupInviteCode(from)
 
       return sock.sendMessage(from, {
@@ -252,31 +249,31 @@ async function startBot() {
     }
 
     // =========================
-    // OWNER GENKEY
+    // GENKEY OWNER
     // =========================
     if (cmd.startsWith(".genkey")) {
 
       if (session.role !== "owner") return
 
       const jam = parseInt(cmd.split(" ")[1]) || 1
-
       const key = "KEY-" + Math.random().toString(36).substring(2, 10)
+
       const exp = Date.now() + jam * 86400000
 
       await User.create({
         key,
+        role: "user",
         expired: exp,
-        createdAt: Date.now(),
-        role: "user"
+        createdAt: Date.now()
       })
 
       return sock.sendMessage(from, {
-        text: `KEY GENERATED\n${key}\nExpired: ${formatTime(exp)}`
+        text: `KEY CREATED\n${key}\nExpired: ${format(exp)}`
       })
     }
 
     // =========================
-    // PANEL OWNER
+    // PANEL
     // =========================
     if (cmd === ".panel") {
 
@@ -287,7 +284,7 @@ async function startBot() {
       let t = "ACTIVE KEYS:\n\n"
 
       all.forEach((x, i) => {
-        t += `${i+1}. ${x.key}\n${formatTime(x.expired)}\n\n`
+        t += `${i+1}. ${x.key}\n${format(x.expired)}\n\n`
       })
 
       return sock.sendMessage(from, { text: t })
