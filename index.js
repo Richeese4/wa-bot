@@ -104,10 +104,13 @@ function format(ms) {
   })
 }
 
+// =========================
+// DETECT LINK
+// =========================
 function isLink(text) {
 
   const regex =
-    /(https?:\/\/|chat\.whatsapp\.com|wa\.me)/gi
+    /((https?:\/\/)|(www\.)|(chat\.whatsapp\.com\/)|(wa\.me\/))/gi
 
   return regex.test(text)
 }
@@ -271,21 +274,19 @@ async function startBot() {
         const participants =
           meta.participants || []
 
-        // user admin
+        // USER ADMIN
         const member =
           participants.find(x =>
             x.id.split(":")[0] === sender
           )
 
-        // bot admin
-        const botNumber =
-          sock.user.id.split(":")[0] +
-          "@s.whatsapp.net"
+        // BOT ADMIN
+        const botId =
+          sock.user.id.split(":")[0]
 
         const bot =
           participants.find(x =>
-            x.id.split(":")[0] ===
-            botNumber.split("@")[0]
+            x.id.split(":")[0] === botId
           )
 
         isAdmin =
@@ -556,7 +557,7 @@ dikeluarkan karena spam chat`,
       }
 
       // =========================
-      // ANTILINK DETECTOR
+      // ANTILINK DETECTOR FIX
       // =========================
       if (
         settings.antilink &&
@@ -564,25 +565,47 @@ dikeluarkan karena spam chat`,
         isLink(text)
       ) {
 
-        // skip admin & owner
+        // admin bebas
+        if (isAdmin)
+          return
+
+        // owner bebas
         if (
-          isAdmin ||
-          sender.includes(OWNER_NUMBER)
+          sender.includes(
+            OWNER_NUMBER
+          )
         ) return
 
         // bot harus admin
-        if (!botAdmin) return
+        if (!botAdmin) {
 
+          return sock.sendMessage(from, {
+            text:
+              "❌ Bot harus admin agar Antilink bekerja"
+          })
+        }
+
+        // DELETE PESAN
         try {
 
-          // delete pesan
           await sock.sendMessage(from, {
-            delete: msg.key
+            delete: {
+              remoteJid: from,
+              fromMe: false,
+              id: msg.key.id,
+              participant: sender
+            }
           })
 
-        } catch {}
+        } catch (err) {
 
-        // warning
+          console.log(
+            "DELETE ERROR:",
+            err.message
+          )
+        }
+
+        // WARNING
         const warns =
           settings.warns || {}
 
@@ -602,13 +625,13 @@ dikeluarkan karena spam chat`,
         const maxWarn =
           settings.maxwarn
 
-        // kick
+        // AUTOKICK
         if (totalWarn >= maxWarn) {
 
           await sock.sendMessage(from, {
             text:
 `🚫 @${sender.split("@")[0]}
-dikeluarkan karena spam link`,
+dikeluarkan karena mengirim link`,
             mentions: [sender]
           })
 
