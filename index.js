@@ -104,10 +104,10 @@ function format(ms) {
   })
 }
 
-function isLink(text = "") {
+function isLink(text) {
 
   const regex =
-    /(?:https?:\/\/|www\.|chat\.whatsapp\.com\/|wa\.me\/|whatsapp\.com\/channel\/|https:\/\/chat\.whatsapp\.com\/)/gi
+    /(https?:\/\/|chat\.whatsapp\.com|wa\.me)/gi
 
   return regex.test(text)
 }
@@ -469,12 +469,11 @@ ${format(data.expired)}`,
         })
       }
 
-            // =========================
-      // FILTER CHAT FIX
+      // =========================
+      // FILTER CHAT
       // =========================
       if (
-        settings.filterchat.length > 0 &&
-        !command.startsWith(".filterchat")
+        settings.filterchat.length > 0
       ) {
 
         const bad =
@@ -486,41 +485,16 @@ ${format(data.expired)}`,
 
         if (bad) {
 
-          // admin bebas
-          if (isAdmin) return
-
-          // owner bebas
-          if (
-            sender.includes(OWNER_NUMBER)
-          ) return
-
-          // bot harus admin
-          if (!botAdmin) return
-
-          try {
-
-            await sock.sendMessage(from, {
-              delete: {
-                remoteJid: from,
-                fromMe: false,
-                id: msg.key.id,
-                participant: msg.key.participant
-              }
-            })
-
-          } catch (e) {
-            console.log(
-              "FILTER DELETE ERROR:",
-              e.message
-            )
-          }
+          await sock.sendMessage(from, {
+            delete: msg.key
+          })
 
           return
         }
       }
 
-            // =========================
-      // ANTILINK FIX
+      // =========================
+      // ANTILINK
       // =========================
       if (
         settings.antilink &&
@@ -528,27 +502,13 @@ ${format(data.expired)}`,
         isLink(text)
       ) {
 
-        // admin bebas
-        if (isAdmin)
-          return
-
-        // owner bebas
         if (
-          sender.includes(
-            OWNER_NUMBER
-          )
+          isAdmin ||
+          sender.includes(OWNER_NUMBER)
         ) return
 
-        // bot harus admin
-        if (!botAdmin) {
+        if (!botAdmin) return
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Bot harus admin agar Antilink bekerja"
-          })
-        }
-
-        // warning
         const warns =
           settings.warns || {}
 
@@ -562,76 +522,49 @@ ${format(data.expired)}`,
 
         await settings.save()
 
-        const totalWarn =
-          warns[sender]
-
         const left =
           settings.maxwarn -
-          totalWarn
+          warns[sender]
 
-        // hapus pesan link
-        try {
+        // delete pesan
+        await sock.sendMessage(from, {
+          delete: msg.key
+        })
 
-          await sock.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: msg.key.id,
-              participant: msg.key.participant
-            }
-          })
-
-        } catch (e) {
-
-          console.log(
-            "ANTILINK DELETE ERROR:",
-            e.message
-          )
-        }
-
-        // autokick
+        // kick
         if (
-          totalWarn >=
+          warns[sender] >=
           settings.maxwarn
         ) {
 
-          try {
-
-            await sock.sendMessage(from, {
-              text:
+          await sock.sendMessage(from, {
+            text:
 `🚫 @${sender.split("@")[0]}
-dikeluarkan karena mengirim link`,
-              mentions: [sender]
-            })
+dikeluarkan karena spam link`,
+            mentions: [sender]
+          })
 
-            await sock.groupParticipantsUpdate(
-              from,
-              [sender],
-              "remove"
-            )
+          await sock.groupParticipantsUpdate(
+            from,
+            [sender],
+            "remove"
+          )
 
-            delete warns[sender]
+          delete warns[sender]
 
-            settings.warns = warns
+          settings.warns = warns
 
-            await settings.save()
-
-          } catch (e) {
-
-            console.log(
-              "KICK ERROR:",
-              e.message
-            )
-          }
+          await settings.save()
 
           return
         }
 
         return sock.sendMessage(from, {
           text:
-`⚠️ Warning ${totalWarn}/${settings.maxwarn}
+`⚠️ Warning ${warns[sender]}/${settings.maxwarn}
 
-Jangan kirim link group WhatsApp.`,
+Jangan kirim link lagi
+Sisa warning: ${left}`,
           mentions: [sender]
         })
       }
@@ -905,46 +838,22 @@ ${word}`
         }
 
         // DELETE
-                // DELETE
         if (action === "del") {
-
-          if (!word) {
-
-            return sock.sendMessage(from, {
-              text:
-`.filterchat del kata`
-            })
-          }
-
-          const before =
-            settings.filterchat.length
 
           settings.filterchat =
             settings.filterchat.filter(
-              x =>
-                x.toLowerCase() !==
-                word.toLowerCase()
+              x => x !== word
             )
 
           await settings.save()
 
-          if (
-            before ===
-            settings.filterchat.length
-          ) {
-
-            return sock.sendMessage(from, {
-              text:
-                "❌ Kata tidak ditemukan"
-            })
-          }
-
           return sock.sendMessage(from, {
             text:
-`✅ Filter dihapus:
+`✅ Dihapus:
 ${word}`
           })
         }
+      }
 
       // =========================
       // KICK
