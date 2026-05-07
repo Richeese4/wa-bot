@@ -18,18 +18,10 @@ const OWNER_KEY = "freewilly123"
 const OWNER_NUMBER = "6282162625200"
 
 // =========================
-// MONGO (FIX + SAFE)
+// MONGO
 // =========================
-const MONGO_URI = "mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority"
+mongoose.connect("mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority")
 
-mongoose.connect(MONGO_URI, {
-  serverSelectionTimeoutMS: 15000
-}).then(() => console.log("MongoDB CONNECTED"))
-.catch(err => console.log("MongoDB ERROR:", err.message))
-
-// =========================
-// MODEL
-// =========================
 const User = mongoose.model("User", new mongoose.Schema({
   key: String,
   role: { type: String, default: "user" },
@@ -42,7 +34,8 @@ const Session = mongoose.model("Session", new mongoose.Schema({
   role: String,
   key: String,
   expired: Number,
-  loginAt: Number
+  loginAt: Number,
+  isAdmin: { type: Boolean, default: false }
 }))
 
 // =========================
@@ -62,14 +55,7 @@ function format(ms) {
 }
 
 // =========================
-// ROLE CHECK HELPER
-// =========================
-function isExpired(session) {
-  return session.expired !== Infinity && Date.now() > session.expired
-}
-
-// =========================
-// BOT
+// BOT START
 // =========================
 async function startBot() {
 
@@ -91,9 +77,7 @@ async function startBot() {
 
     if (qr) qrcode.generate(qr, { small: true })
 
-    if (connection === "open") {
-      console.log("BOT ONLINE")
-    }
+    if (connection === "open") console.log("BOT ONLINE")
 
     if (connection === "close") {
       const reconnect =
@@ -104,7 +88,7 @@ async function startBot() {
   })
 
   // =========================
-  // GROUP WELCOME (NO LOGIN)
+  // WELCOME / LEAVE
   // =========================
   sock.ev.on("group-participants.update", async (m) => {
     try {
@@ -131,7 +115,7 @@ async function startBot() {
   })
 
   // =========================
-  // MESSAGE HANDLER
+  // MESSAGE
   // =========================
   sock.ev.on("messages.upsert", async ({ messages }) => {
 
@@ -150,7 +134,7 @@ async function startBot() {
     const isGroup = from.endsWith("@g.us")
 
     // =========================
-    // LOAD SESSION
+    // SESSION LOAD
     // =========================
     let session = await Session.findOne({ jid: sender })
 
@@ -164,12 +148,13 @@ async function startBot() {
     }
 
     // =========================
-    // LOGIN
+    // LOGIN SYSTEM
     // =========================
     if (cmd.startsWith(".login")) {
 
       const key = cmd.split(" ")[1]
 
+      // OWNER LOGIN
       if (key === OWNER_KEY) {
 
         await Session.findOneAndUpdate(
@@ -177,15 +162,15 @@ async function startBot() {
           {
             jid: sender,
             role: "owner",
-            key,
             expired: Infinity,
-            loginAt: Date.now()
+            loginAt: Date.now(),
+            isAdmin: true
           },
           { upsert: true }
         )
 
         return sock.sendMessage(from, {
-          text: `👑 OWNER LOGIN SUCCESS\nWelcome back owner`
+          text: "👑 OWNER LOGIN SUCCESS"
         })
       }
 
@@ -202,8 +187,8 @@ async function startBot() {
         {
           jid: sender,
           role: data.role,
-          key,
           expired: data.expired,
+          key,
           loginAt: Date.now()
         },
         { upsert: true }
@@ -217,53 +202,73 @@ async function startBot() {
     session = await Session.findOne({ jid: sender })
     if (!session) return
 
-    // =========================
-    // AUTO EXPIRED
-    // =========================
-    if (isExpired(session)) {
-      await Session.deleteOne({ jid: sender })
-      return sock.sendMessage(from, {
-        text: "❌ Session expired"
-      })
-    }
-
     const role = session.role
 
     // =========================
     // ADMIN CHECK GROUP
     // =========================
     let isAdmin = false
+
     if (isGroup) {
       const meta = await sock.groupMetadata(from)
-      const admin = meta.participants.find(p =>
-        p.id === sender && (p.admin === "admin" || p.admin === "superadmin")
-      )
-      isAdmin = !!admin
+      const p = meta.participants.find(x => x.id === sender)
+      isAdmin = p?.admin ? true : false
+    }
+
+    // OWNER BYPASS ADMIN
+    const bypassAdmin = role === "owner"
+
+    // =========================
+    // EXPIRY CHECK
+    // =========================
+    if (session.expired !== Infinity && Date.now() > session.expired) {
+      await Session.deleteOne({ jid: sender })
+      return sock.sendMessage(from, {
+        text: "❌ Session expired"
+      })
     }
 
     // =========================
-    // USER LIMIT COMMAND
+    // USER LIMIT
     // =========================
     const userOnly = [".linkgroup", ".sticker"]
 
     if (role === "user" && cmd.startsWith(".") && !userOnly.includes(cmd.split(" ")[0])) {
       return sock.sendMessage(from, {
-        text: "❌ User terbatas"
+        text: "❌ Akses terbatas user"
       })
     }
 
     // =========================
-    // MENU
+    // MENU MASAAKTIF
     // =========================
-    if (cmd === ".menu") {
+    if (cmd === ".masaaktif") {
       return sock.sendMessage(from, {
         text:
-`📌 MENU
-.linkgroup
-.sticker
-.owner
-.premium
-.masaaktif`
+`📌 MASA AKTIF
+.perpanjang
+.premium`
+      })
+    }
+
+    // =========================
+    // MASA AKTIF EXTEND
+    // =========================
+    if (cmd === ".perpanjang") {
+      return sock.sendMessage(from, {
+        text: `Hubungi owner:\n${OWNER_NUMBER}`
+      })
+    }
+
+    if (cmd === ".premium") {
+      return sock.sendMessage(from, {
+        text: `Premium info:\nHubungi: ${OWNER_NUMBER}`
+      })
+    }
+
+    if (cmd === ".qris") {
+      return sock.sendMessage(from, {
+        text: "QRIS ALL PAYMENT OWNER"
       })
     }
 
@@ -280,16 +285,16 @@ async function startBot() {
     }
 
     // =========================
-    // STICKER (placeholder)
+    // STICKER
     // =========================
     if (cmd === ".sticker") {
       return sock.sendMessage(from, {
-        text: "Sticker butuh ffmpeg"
+        text: "Sticker system aktif"
       })
     }
 
     // =========================
-    // OWNER GENKEY
+    // GENKEY OWNER
     // =========================
     if (cmd.startsWith(".genkey")) {
       if (role !== "owner") return
@@ -306,8 +311,24 @@ async function startBot() {
       })
 
       return sock.sendMessage(from, {
-        text: `KEY CREATED:\n${key}\nExpired: ${format(exp)}`
+        text: `KEY:\n${key}\nExpired: ${format(exp)}`
       })
+    }
+
+    // =========================
+    // PANEL
+    // =========================
+    if (cmd === ".panel") {
+      if (role !== "owner") return
+
+      const all = await User.find()
+      let t = "ACTIVE KEYS:\n\n"
+
+      all.forEach((x, i) => {
+        t += `${i+1}. ${x.key}\n${format(x.expired)}\n\n`
+      })
+
+      return sock.sendMessage(from, { text: t })
     }
 
   })
