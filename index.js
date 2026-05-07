@@ -205,20 +205,21 @@ async function startBot() {
   // =========================
   // MESSAGE
   // =========================
-  sock.ev.on("messages.upsert", async ({ messages }) => {
+const msg = messages[0]
+if (!msg.message) return
 
-    try {
+if (msg.key.remoteJid === "status@broadcast")
+  return
 
-      const msg = messages[0]
-      if (!msg.message) return
+// =========================
+// BASIC INFO
+// =========================
+const from = msg.key.remoteJid
 
-      if (msg.key.remoteJid === "status@broadcast")
-        return
-
-  const participant =
+const participant =
   msg.key.participant || ""
 
-      const sender =
+const sender =
   participant || from
 
       const text =
