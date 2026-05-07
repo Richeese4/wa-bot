@@ -104,10 +104,13 @@ function format(ms) {
   })
 }
 
+// =========================
+// DETECT LINK
+// =========================
 function isLink(text) {
 
   const regex =
-    /(https?:\/\/|chat\.whatsapp\.com|wa\.me)/gi
+    /(https?:\/\/\S+|chat\.whatsapp\.com\/\S+|wa\.me\/\S+)/gi
 
   return regex.test(text)
 }
@@ -161,44 +164,6 @@ async function startBot() {
       if (shouldReconnect) {
         startBot()
       }
-    }
-  })
-
-  // =========================
-  // WELCOME / LEAVE
-  // =========================
-  sock.ev.on("group-participants.update", async (m) => {
-
-    try {
-
-      // MEMBER MASUK
-      if (m.action === "add") {
-
-        for (let p of m.participants) {
-
-          await sock.sendMessage(m.id, {
-            image: fs.readFileSync("./welcome.jpg"),
-            caption: `👋 Welcome @${p.split("@")[0]}`,
-            mentions: [p]
-          })
-        }
-      }
-
-      // MEMBER KELUAR
-      if (m.action === "remove") {
-
-        for (let p of m.participants) {
-
-          await sock.sendMessage(m.id, {
-            image: fs.readFileSync("./keluar.jpg"),
-            caption: `👋 @${p.split("@")[0]} keluar`,
-            mentions: [p]
-          })
-        }
-      }
-
-    } catch (e) {
-      console.log(e)
     }
   })
 
@@ -268,11 +233,13 @@ async function startBot() {
             x => x.id === sender
           )
 
+        const botNumber =
+          sock.user.id.split(":")[0] +
+          "@s.whatsapp.net"
+
         const bot =
           meta.participants.find(
-            x => x.id.includes(
-              sock.user.id.split(":")[0]
-            )
+            x => x.id === botNumber
           )
 
         isAdmin =
@@ -427,53 +394,11 @@ ${format(data.expired)}`,
         session.role || "user"
 
       // =========================
-      // EXPIRED
-      // =========================
-      if (
-        session.expired !== 9999999999999 &&
-        Date.now() > session.expired
-      ) {
-
-        await Session.deleteOne({
-          group: from
-        })
-
-        return sock.sendMessage(from, {
-          text:
-            "❌ Session expired"
-        })
-      }
-
-      // =========================
-      // USER LIMIT
-      // =========================
-      const userLimit = [
-        ".menu",
-        ".linkgroup",
-        ".sticker",
-        ".masaaktif",
-        ".owner",
-        ".contact",
-        ".sewabot"
-      ]
-
-      if (
-        currentRole === "user" &&
-        command.startsWith(".") &&
-        !userLimit.includes(command)
-      ) {
-
-        return sock.sendMessage(from, {
-          text:
-            "❌ Akses user terbatas"
-        })
-      }
-
-      // =========================
       // FILTER CHAT
       // =========================
       if (
-        settings.filterchat.length > 0
+        settings.filterchat.length > 0 &&
+        !command.startsWith(".filterchat")
       ) {
 
         const bad =
@@ -485,9 +410,24 @@ ${format(data.expired)}`,
 
         if (bad) {
 
-          await sock.sendMessage(from, {
-            delete: msg.key
-          })
+          try {
+
+            await sock.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: msg.key.id,
+                participant: sender
+              }
+            })
+
+          } catch (e) {
+
+            console.log(
+              "FILTER DELETE ERROR:",
+              e.message
+            )
+          }
 
           return
         }
@@ -498,199 +438,117 @@ ${format(data.expired)}`,
       // =========================
       if (
         settings.antilink &&
-        isGroup &&
-        isLink(text)
+        isGroup
       ) {
 
-        if (
-          isAdmin ||
-          sender.includes(OWNER_NUMBER)
-        ) return
+        const detectLink =
+          isLink(text)
 
-        if (!botAdmin) return
+        if (detectLink) {
 
-        const warns =
-          settings.warns || {}
+          // skip admin
+          if (
+            isAdmin ||
+            sender.includes(OWNER_NUMBER)
+          ) return
 
-        if (!warns[sender]) {
-          warns[sender] = 0
-        }
+          // bot wajib admin
+          if (!botAdmin) {
 
-        warns[sender] += 1
+            return sock.sendMessage(from, {
+              text:
+                "❌ Bot harus admin agar antilink bekerja"
+            })
+          }
 
-        settings.warns = warns
+          const warns =
+            settings.warns || {}
 
-        await settings.save()
+          if (!warns[sender]) {
+            warns[sender] = 0
+          }
 
-        const left =
-          settings.maxwarn -
-          warns[sender]
-
-        // delete pesan
-        await sock.sendMessage(from, {
-          delete: msg.key
-        })
-
-        // kick
-        if (
-          warns[sender] >=
-          settings.maxwarn
-        ) {
-
-          await sock.sendMessage(from, {
-            text:
-`🚫 @${sender.split("@")[0]}
-dikeluarkan karena spam link`,
-            mentions: [sender]
-          })
-
-          await sock.groupParticipantsUpdate(
-            from,
-            [sender],
-            "remove"
-          )
-
-          delete warns[sender]
+          warns[sender] += 1
 
           settings.warns = warns
 
           await settings.save()
 
-          return
-        }
+          const left =
+            settings.maxwarn -
+            warns[sender]
 
-        return sock.sendMessage(from, {
-          text:
+          // DELETE PESAN
+          try {
+
+            await sock.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: msg.key.id,
+                participant: sender
+              }
+            })
+
+          } catch (e) {
+
+            console.log(
+              "ANTILINK DELETE ERROR:",
+              e.message
+            )
+          }
+
+          // AUTO KICK
+          if (
+            warns[sender] >=
+            settings.maxwarn
+          ) {
+
+            await sock.sendMessage(from, {
+              text:
+`🚫 @${sender.split("@")[0]}
+dikeluarkan karena spam link`,
+              mentions: [sender]
+            })
+
+            try {
+
+              await sock.groupParticipantsUpdate(
+                from,
+                [sender],
+                "remove"
+              )
+
+            } catch (e) {
+
+              console.log(
+                "AUTO KICK ERROR:",
+                e.message
+              )
+            }
+
+            delete warns[sender]
+
+            settings.warns = warns
+
+            await settings.save()
+
+            return
+          }
+
+          return sock.sendMessage(from, {
+            text:
 `⚠️ Warning ${warns[sender]}/${settings.maxwarn}
 
 Jangan kirim link lagi
 Sisa warning: ${left}`,
-          mentions: [sender]
-        })
-      }
-
-      // =========================
-      // MENU
-      // =========================
-      if (command === ".menu") {
-
-        // OWNER
-        if (currentRole === "owner") {
-
-          return sock.sendMessage(from, {
-            text:
-`👑 OWNER MENU
-
-🔑 KEY SYSTEM
-.genkey <hari>
-.genprem <hari>
-
-🛠 PANEL
-.panel
-.addtime <key> <hari>
-.deltime <key> <hari>
-.delkey <key>
-
-👮 GROUP
-.antilink on/off
-.autokick <jumlah>
-.filterchat add <kata>
-.filterchat del <kata>
-.kick
-
-📌 OTHER
-.linkgroup
-.sticker`
+            mentions: [sender]
           })
         }
-
-        // PREMIUM
-        if (currentRole === "premium") {
-
-          return sock.sendMessage(from, {
-            text:
-`⭐ PREMIUM MENU
-
-👮 GROUP
-.antilink on/off
-.autokick <jumlah>
-.filterchat add <kata>
-.filterchat del <kata>
-.kick
-
-📌 OTHER
-.linkgroup
-.sticker
-.owner`
-          })
-        }
-
-        // USER
-        return sock.sendMessage(from, {
-          text:
-`📌 USER MENU
-
-.linkgroup
-.sticker
-.masaaktif
-.owner`
-        })
       }
 
       // =========================
-      // OWNER MENU
-      // =========================
-      if (command === ".owner") {
-
-        if (currentRole === "owner")
-          return
-
-        return sock.sendMessage(from, {
-          text:
-`👑 OWNER MENU
-
-.contact
-.sewabot`
-        })
-      }
-
-      // =========================
-      // CONTACT
-      // =========================
-      if (command === ".contact") {
-
-        return sock.sendMessage(from, {
-          text:
-`📞 CONTACT OWNER
-
-wa.me/${OWNER_NUMBER}`
-        })
-      }
-
-      // =========================
-      // SEWABOT
-      // =========================
-      if (command === ".sewabot") {
-
-        return sock.sendMessage(from, {
-          text:
-`📦 LIST SEWA BOT
-
-⭐ USER
-5K = 7 Hari
-10K = 30 Hari
-
-👑 PREMIUM
-15K = 30 Hari
-25K = 90 Hari
-
-📞 ORDER:
-wa.me/${OWNER_NUMBER}`
-        })
-      }
-
-      // =========================
-      // ANTILINK
+      // ANTILINK COMMAND
       // =========================
       if (command === ".antilink") {
 
@@ -734,53 +592,7 @@ wa.me/${OWNER_NUMBER}`
       }
 
       // =========================
-      // AUTOKICK
-      // =========================
-      if (command === ".autokick") {
-
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
-
-        if (!isAdmin) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
-        }
-
-        const jumlah =
-          parseInt(
-            cmd.split(" ")[1]
-          )
-
-        if (
-          !jumlah ||
-          jumlah < 1
-        ) {
-
-          return sock.sendMessage(from, {
-            text:
-`.autokick 3`
-          })
-        }
-
-        settings.maxwarn =
-          jumlah
-
-        await settings.save()
-
-        return sock.sendMessage(from, {
-          text:
-`✅ AutoKick:
-${jumlah} warning`
-        })
-      }
-
-      // =========================
-      // FILTER CHAT
+      // FILTERCHAT COMMAND
       // =========================
       if (command === ".filterchat") {
 
@@ -817,7 +629,13 @@ ${jumlah} warning`
         // ADD
         if (action === "add") {
 
-          if (!word) return
+          if (!word) {
+
+            return sock.sendMessage(from, {
+              text:
+                "❌ Masukkan kata"
+            })
+          }
 
           if (
             !settings.filterchat
@@ -853,379 +671,6 @@ ${word}`
 ${word}`
           })
         }
-      }
-
-      // =========================
-      // KICK
-      // =========================
-      if (command === ".kick") {
-
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
-
-        if (!isAdmin) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
-        }
-
-        if (!botAdmin) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Bot bukan admin"
-          })
-        }
-
-        let target
-
-        // reply
-        if (
-          msg.message
-          .extendedTextMessage
-          ?.contextInfo
-          ?.participant
-        ) {
-
-          target =
-            msg.message
-            .extendedTextMessage
-            .contextInfo
-            .participant
-        }
-
-        // nomor
-        else {
-
-          const nomor =
-            cmd.split(" ")[1]
-
-          if (!nomor) {
-
-            return sock.sendMessage(from, {
-              text:
-`.kick 628xxxx`
-            })
-          }
-
-          target =
-            nomor
-            .replace(/[^0-9]/g, "") +
-            "@s.whatsapp.net"
-        }
-
-        await sock.groupParticipantsUpdate(
-          from,
-          [target],
-          "remove"
-        )
-
-        return sock.sendMessage(from, {
-          text:
-            "✅ Berhasil kick member"
-        })
-      }
-
-      // =========================
-      // LINK GROUP
-      // =========================
-      if (command === ".linkgroup") {
-
-        const code =
-          await sock.groupInviteCode(from)
-
-        return sock.sendMessage(from, {
-          text:
-            "https://chat.whatsapp.com/" + code
-        })
-      }
-
-      // =========================
-      // STICKER
-      // =========================
-      if (command === ".sticker") {
-
-        return sock.sendMessage(from, {
-          text:
-            "✅ Sticker system aktif"
-        })
-      }
-
-      // =========================
-      // MASA AKTIF
-      // =========================
-      if (command === ".masaaktif") {
-
-        return sock.sendMessage(from, {
-          text:
-`📅 MASA AKTIF BOT
-
-Expired:
-${format(session.expired)}`
-        })
-      }
-
-      // =========================
-      // GENKEY USER
-      // =========================
-      if (command === ".genkey") {
-
-        if (currentRole !== "owner")
-          return
-
-        const hari =
-          parseInt(
-            cmd.split(" ")[1]
-          )
-
-        if (!hari) {
-
-          return sock.sendMessage(from, {
-            text:
-`.genkey 7`
-          })
-        }
-
-        const key =
-          "KEY-" +
-          Math.random()
-          .toString(36)
-          .slice(2, 10)
-          .toUpperCase()
-
-        const exp =
-          Date.now() +
-          (
-            hari *
-            86400000
-          )
-
-        await User.create({
-          key,
-          role: "user",
-          expired: exp,
-          createdAt: Date.now()
-        })
-
-        return sock.sendMessage(from, {
-          text:
-`✅ USER KEY
-
-🔑 ${key}
-
-⏳ ${hari} Hari
-📅 ${format(exp)}`
-        })
-      }
-
-      // =========================
-      // GENKEY PREMIUM
-      // =========================
-      if (command === ".genprem") {
-
-        if (currentRole !== "owner")
-          return
-
-        const hari =
-          parseInt(
-            cmd.split(" ")[1]
-          )
-
-        if (!hari) {
-
-          return sock.sendMessage(from, {
-            text:
-`.genprem 30`
-          })
-        }
-
-        const key =
-          "PREM-" +
-          Math.random()
-          .toString(36)
-          .slice(2, 10)
-          .toUpperCase()
-
-        const exp =
-          Date.now() +
-          (
-            hari *
-            86400000
-          )
-
-        await User.create({
-          key,
-          role: "premium",
-          expired: exp,
-          createdAt: Date.now()
-        })
-
-        return sock.sendMessage(from, {
-          text:
-`⭐ PREMIUM KEY
-
-🔑 ${key}
-
-⏳ ${hari} Hari
-📅 ${format(exp)}`
-        })
-      }
-
-      // =========================
-      // ADDTIME
-      // =========================
-      if (command === ".addtime") {
-
-        if (currentRole !== "owner")
-          return
-
-        const key =
-          cmd.split(" ")[1]
-
-        const hari =
-          parseInt(
-            cmd.split(" ")[2]
-          )
-
-        const user =
-          await User.findOne({
-            key
-          })
-
-        if (!user) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Key tidak ditemukan"
-          })
-        }
-
-        user.expired +=
-          hari * 86400000
-
-        await user.save()
-
-        return sock.sendMessage(from, {
-          text:
-`✅ Masa aktif ditambah
-
-${key}
-
-${format(user.expired)}`
-        })
-      }
-
-      // =========================
-      // DELTIME
-      // =========================
-      if (command === ".deltime") {
-
-        if (currentRole !== "owner")
-          return
-
-        const key =
-          cmd.split(" ")[1]
-
-        const hari =
-          parseInt(
-            cmd.split(" ")[2]
-          )
-
-        const user =
-          await User.findOne({
-            key
-          })
-
-        if (!user) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Key tidak ditemukan"
-          })
-        }
-
-        user.expired -=
-          hari * 86400000
-
-        await user.save()
-
-        return sock.sendMessage(from, {
-          text:
-`✅ Masa aktif dikurangi
-
-${key}
-
-${format(user.expired)}`
-        })
-      }
-
-      // =========================
-      // DELKEY
-      // =========================
-      if (command === ".delkey") {
-
-        if (currentRole !== "owner")
-          return
-
-        const key =
-          cmd.split(" ")[1]
-
-        const user =
-          await User.findOne({
-            key
-          })
-
-        if (!user) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Key tidak ditemukan"
-          })
-        }
-
-        await User.deleteOne({
-          key
-        })
-
-        return sock.sendMessage(from, {
-          text:
-`✅ Key dihapus
-
-${key}`
-        })
-      }
-
-      // =========================
-      // PANEL
-      // =========================
-      if (command === ".panel") {
-
-        if (currentRole !== "owner")
-          return
-
-        const all =
-          await User.find()
-
-        let txt =
-          "📌 ACTIVE KEYS\n\n"
-
-        all.forEach((x, i) => {
-
-          txt +=
-`${i + 1}. ${x.key}
-Role: ${x.role}
-Expired: ${format(x.expired)}
-
-`
-        })
-
-        return sock.sendMessage(from, {
-          text: txt
-        })
       }
 
     } catch (e) {
