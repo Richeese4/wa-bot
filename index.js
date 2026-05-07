@@ -105,12 +105,12 @@ function format(ms) {
 }
 
 // =========================
-// LINK DETECTOR FIX
+// DETECT LINK FIX
 // =========================
-function isLink(text) {
+function isLink(text = "") {
 
   const regex =
-    /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(chat\.whatsapp\.com\/[A-Za-z0-9]+)/gi
+    /(https?:\/\/\S+)|(www\.\S+)|(chat\.whatsapp\.com\/\S+)|(wa\.me\/\S+)/gi
 
   return regex.test(text)
 }
@@ -174,7 +174,6 @@ async function startBot() {
 
     try {
 
-      // MEMBER MASUK
       if (m.action === "add") {
 
         for (let p of m.participants) {
@@ -187,7 +186,6 @@ async function startBot() {
         }
       }
 
-      // MEMBER KELUAR
       if (m.action === "remove") {
 
         for (let p of m.participants) {
@@ -215,11 +213,9 @@ async function startBot() {
       const msg = messages[0]
       if (!msg.message) return
 
-      // skip status
       if (msg.key.remoteJid === "status@broadcast")
         return
 
-      // skip bot sendiri
       if (msg.key.fromMe)
         return
 
@@ -230,14 +226,34 @@ async function startBot() {
         .split(":")[0]
 
       // =========================
-      // TEXT DETECTOR FIX
+      // AMBIL TEXT FIX
       // =========================
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        msg.message.videoMessage?.caption ||
-        ""
+      let text = ""
+
+      if (msg.message.conversation) {
+        text = msg.message.conversation
+      }
+
+      else if (
+        msg.message.extendedTextMessage?.text
+      ) {
+        text =
+          msg.message.extendedTextMessage.text
+      }
+
+      else if (
+        msg.message.imageMessage?.caption
+      ) {
+        text =
+          msg.message.imageMessage.caption
+      }
+
+      else if (
+        msg.message.videoMessage?.caption
+      ) {
+        text =
+          msg.message.videoMessage.caption
+      }
 
       if (!text) return
 
@@ -273,27 +289,25 @@ async function startBot() {
 
       if (isGroup) {
 
-        const metadata =
+        const meta =
           await sock.groupMetadata(from)
 
         const participants =
-          metadata.participants || []
+          meta.participants || []
 
-        // user admin
         const member =
           participants.find(
-            v =>
-              v.id.split(":")[0] === sender
+            x =>
+              x.id.split(":")[0] === sender
           )
 
-        // bot admin
         const botId =
           sock.user.id.split(":")[0]
 
         const bot =
           participants.find(
-            v =>
-              v.id.split(":")[0] === botId
+            x =>
+              x.id.split(":")[0] === botId
           )
 
         isAdmin =
@@ -367,7 +381,6 @@ Silahkan login:
           })
         }
 
-        // OWNER LOGIN
         if (isOwner) {
 
           await Session.findOneAndUpdate(
@@ -391,7 +404,6 @@ Silahkan login:
           })
         }
 
-        // USER LOGIN
         const data =
           await User.findOne({
             key: inputKey
@@ -493,7 +505,43 @@ ${format(data.expired)}`,
       }
 
       // =========================
-      // ANTILINK FIX
+      // FILTER CHAT FIX
+      // =========================
+      if (
+        settings.filterchat.length > 0 &&
+        !command.startsWith(".filterchat")
+      ) {
+
+        const bad =
+          settings.filterchat.find(
+            x =>
+              text.toLowerCase()
+              .includes(x.toLowerCase())
+          )
+
+        if (bad) {
+
+          try {
+
+            await sock.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: msg.key.id,
+                participant: msg.key.participant
+              }
+            })
+
+          } catch (err) {
+            console.log(err)
+          }
+
+          return
+        }
+      }
+
+      // =========================
+      // ANTILINK FIX TOTAL
       // =========================
       if (
         settings.antilink &&
@@ -501,45 +549,13 @@ ${format(data.expired)}`,
         isLink(text)
       ) {
 
-        // admin bebas
-        if (isAdmin)
-          return
-
-        // owner bebas
         if (
+          isAdmin ||
           sender.includes(OWNER_NUMBER)
         ) return
 
-        // bot harus admin
-        if (!botAdmin) {
+        if (!botAdmin) return
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Bot harus admin agar antilink bekerja"
-          })
-        }
-
-        // DELETE PESAN
-        try {
-
-          await sock.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: msg.key.id,
-              participant: msg.key.participant || sender
-            }
-          })
-
-        } catch (err) {
-
-          console.log(
-            "DELETE ERROR:",
-            err.message
-          )
-        }
-
-        // WARNING
         const warns =
           settings.warns || {}
 
@@ -553,19 +569,39 @@ ${format(data.expired)}`,
 
         await settings.save()
 
-        const totalWarn =
+        const left =
+          settings.maxwarn -
           warns[sender]
 
-        const maxWarn =
-          settings.maxwarn
+        // DELETE PESAN FIX
+        try {
 
-        // AUTOKICK
-        if (totalWarn >= maxWarn) {
+          await sock.sendMessage(from, {
+            delete: {
+              remoteJid: from,
+              fromMe: false,
+              id: msg.key.id,
+              participant: msg.key.participant
+            }
+          })
+
+        } catch (err) {
+          console.log(
+            "DELETE ERROR:",
+            err.message
+          )
+        }
+
+        // KICK
+        if (
+          warns[sender] >=
+          settings.maxwarn
+        ) {
 
           await sock.sendMessage(from, {
             text:
 `🚫 @${sender.split("@")[0]}
-dikeluarkan karena mengirim link`,
+dikeluarkan karena spam link`,
             mentions: [sender]
           })
 
@@ -586,9 +622,10 @@ dikeluarkan karena mengirim link`,
 
         return sock.sendMessage(from, {
           text:
-`⚠️ WARNING ${totalWarn}/${maxWarn}
+`⚠️ Warning ${warns[sender]}/${settings.maxwarn}
 
-Jangan kirim link di group.`,
+Jangan kirim link lagi
+Sisa warning: ${left}`,
           mentions: [sender]
         })
       }
@@ -598,16 +635,115 @@ Jangan kirim link di group.`,
       // =========================
       if (command === ".menu") {
 
+        if (currentRole === "owner") {
+
+          return sock.sendMessage(from, {
+            text:
+`👑 OWNER MENU
+
+🔑 KEY SYSTEM
+.genkey <hari>
+.genprem <hari>
+
+🛠 PANEL
+.panel
+.addtime <key> <hari>
+.deltime <key> <hari>
+.delkey <key>
+
+👮 GROUP
+.antilink on/off
+.autokick <jumlah>
+.filterchat add <kata>
+.filterchat del <kata>
+.kick
+
+📌 OTHER
+.linkgroup
+.sticker`
+          })
+        }
+
+        if (currentRole === "premium") {
+
+          return sock.sendMessage(from, {
+            text:
+`⭐ PREMIUM MENU
+
+👮 GROUP
+.antilink on/off
+.autokick <jumlah>
+.filterchat add <kata>
+.filterchat del <kata>
+.kick
+
+📌 OTHER
+.linkgroup
+.sticker
+.owner`
+          })
+        }
+
         return sock.sendMessage(from, {
           text:
-`📌 MENU BOT
+`📌 USER MENU
 
-.antilink on/off
-.autokick 3
-.kick
 .linkgroup
-.owner
-.masaaktif`
+.sticker
+.masaaktif
+.owner`
+        })
+      }
+
+      // =========================
+      // OWNER
+      // =========================
+      if (command === ".owner") {
+
+        if (currentRole === "owner")
+          return
+
+        return sock.sendMessage(from, {
+          text:
+`👑 OWNER MENU
+
+.contact
+.sewabot`
+        })
+      }
+
+      // =========================
+      // CONTACT
+      // =========================
+      if (command === ".contact") {
+
+        return sock.sendMessage(from, {
+          text:
+`📞 CONTACT OWNER
+
+wa.me/${OWNER_NUMBER}`
+        })
+      }
+
+      // =========================
+      // SEWABOT
+      // =========================
+      if (command === ".sewabot") {
+
+        return sock.sendMessage(from, {
+          text:
+`📦 LIST SEWA BOT
+
+⭐ USER
+5K = 7 Hari
+10K = 30 Hari
+
+👑 PREMIUM
+15K = 30 Hari
+25K = 90 Hari
+
+📞 ORDER:
+wa.me/${OWNER_NUMBER}`
         })
       }
 
@@ -615,6 +751,11 @@ Jangan kirim link di group.`,
       // ANTILINK
       // =========================
       if (command === ".antilink") {
+
+        if (
+          currentRole !== "premium" &&
+          currentRole !== "owner"
+        ) return
 
         if (!isAdmin) {
 
@@ -655,6 +796,11 @@ Jangan kirim link di group.`,
       // =========================
       if (command === ".autokick") {
 
+        if (
+          currentRole !== "premium" &&
+          currentRole !== "owner"
+        ) return
+
         if (!isAdmin) {
 
           return sock.sendMessage(from, {
@@ -692,12 +838,119 @@ ${jumlah} warning`
       }
 
       // =========================
+      // FILTER CHAT FIX
+      // =========================
+      if (command === ".filterchat") {
+
+        if (
+          currentRole !== "premium" &&
+          currentRole !== "owner"
+        ) return
+
+        if (!isAdmin) {
+
+          return sock.sendMessage(from, {
+            text:
+              "❌ Khusus admin"
+          })
+        }
+
+        const action =
+          cmd.split(" ")[1]
+
+        const word =
+          cmd.split(" ")
+          .slice(2)
+          .join(" ")
+
+        if (!action) {
+
+          return sock.sendMessage(from, {
+            text:
+`.filterchat add kata
+.filterchat del kata`
+          })
+        }
+
+        // ADD
+        if (action === "add") {
+
+          if (!word) {
+
+            return sock.sendMessage(from, {
+              text:
+`.filterchat add kata`
+            })
+          }
+
+          if (
+            !settings.filterchat
+            .includes(word)
+          ) {
+
+            settings.filterchat.push(word)
+
+            await settings.save()
+          }
+
+          return sock.sendMessage(from, {
+            text:
+`✅ Ditambahkan:
+${word}`
+          })
+        }
+
+        // DEL FIX
+        if (action === "del") {
+
+          if (!word) {
+
+            return sock.sendMessage(from, {
+              text:
+`.filterchat del kata`
+            })
+          }
+
+          const before =
+            settings.filterchat.length
+
+          settings.filterchat =
+            settings.filterchat.filter(
+              x =>
+                x.toLowerCase() !==
+                word.toLowerCase()
+            )
+
+          await settings.save()
+
+          if (
+            before ===
+            settings.filterchat.length
+          ) {
+
+            return sock.sendMessage(from, {
+              text:
+                "❌ Kata tidak ditemukan"
+            })
+          }
+
+          return sock.sendMessage(from, {
+            text:
+`✅ Dihapus:
+${word}`
+          })
+        }
+      }
+
+      // =========================
       // KICK FIX
       // =========================
       if (command === ".kick") {
 
-        if (!isGroup)
-          return
+        if (
+          currentRole !== "premium" &&
+          currentRole !== "owner"
+        ) return
 
         if (!isAdmin) {
 
@@ -715,21 +968,22 @@ ${jumlah} warning`
           })
         }
 
-        let target = null
+        let target
 
-        // reply
-        const quoted =
-          msg.message?.extendedTextMessage
-            ?.contextInfo?.participant
-
-        if (quoted) {
+        // REPLY
+        if (
+          msg.message.extendedTextMessage
+          ?.contextInfo?.participant
+        ) {
 
           target =
-            quoted.split(":")[0] +
-            "@s.whatsapp.net"
+            msg.message
+            .extendedTextMessage
+            .contextInfo
+            .participant
         }
 
-        // nomor manual
+        // NOMOR
         else {
 
           const nomor =
@@ -739,40 +993,14 @@ ${jumlah} warning`
 
             return sock.sendMessage(from, {
               text:
-`.kick 628xxxx
-
-atau reply pesan target`
+`.kick 628xxxx`
             })
           }
 
           target =
-            nomor.replace(/[^0-9]/g, "") +
+            nomor
+            .replace(/[^0-9]/g, "") +
             "@s.whatsapp.net"
-        }
-
-        // tidak bisa kick admin
-        const metadata =
-          await sock.groupMetadata(from)
-
-        const participants =
-          metadata.participants || []
-
-        const targetUser =
-          participants.find(
-            v =>
-              v.id.split(":")[0] ===
-              target.split("@")[0]
-          )
-
-        if (
-          targetUser?.admin === "admin" ||
-          targetUser?.admin === "superadmin"
-        ) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Tidak bisa kick admin"
-          })
         }
 
         try {
@@ -804,15 +1032,23 @@ ${err.message}`
       // =========================
       if (command === ".linkgroup") {
 
-        if (!isGroup)
-          return
-
         const code =
           await sock.groupInviteCode(from)
 
         return sock.sendMessage(from, {
           text:
             "https://chat.whatsapp.com/" + code
+        })
+      }
+
+      // =========================
+      // STICKER
+      // =========================
+      if (command === ".sticker") {
+
+        return sock.sendMessage(from, {
+          text:
+            "✅ Sticker system aktif"
         })
       }
 
@@ -830,24 +1066,11 @@ ${format(session.expired)}`
         })
       }
 
-      // =========================
-      // OWNER
-      // =========================
-      if (command === ".owner") {
-
-        return sock.sendMessage(from, {
-          text:
-`📞 OWNER
-
-wa.me/${OWNER_NUMBER}`
-        })
-      }
-
     } catch (e) {
 
       console.log(
         "ERROR:",
-        e
+        e.message
       )
     }
   })
