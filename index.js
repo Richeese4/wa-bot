@@ -105,11 +105,8 @@ function format(ms) {
 }
 
 function isLink(text) {
-
-  const regex =
-    /(https?:\/\/|chat\.whatsapp\.com|wa\.me)/gi
-
-  return regex.test(text)
+  const regex = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+)/gi;
+  return regex.test(text);
 }
 
 // =========================
@@ -259,10 +256,17 @@ const sender =
 let isAdmin = false
 let botAdmin = false
 
+// Di dalam sock.ev.on("messages.upsert")
 if (isGroup) {
+  const meta = await sock.groupMetadata(from);
+  const botNumber = sock.user.id.replace(/:.*@/, "@"); // Format bersih: nomor@s.whatsapp.net
 
-  const meta =
-    await sock.groupMetadata(from)
+  const member = meta.participants.find(x => x.id === sender);
+  const bot = meta.participants.find(x => x.id === botNumber);
+
+  isAdmin = !!member?.admin || member?.ismadmin; // Beberapa versi baileys menggunakan ismadmin
+  botAdmin = !!bot?.admin;
+}
 
   // normalize sender
   const senderId =
