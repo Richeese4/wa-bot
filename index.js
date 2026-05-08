@@ -20,18 +20,24 @@ const OWNER_NUMBER = "6282162625200"
 // =========================
 // MONGO CONNECT
 // =========================
-const MONGO_URI = "mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority"
+const MONGO_URI =
+  "mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority"
 
-mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
-  .then(() => console.log("MongoDB CONNECTED"))
-  .catch(err => console.log("MongoDB ERROR:", err.message))
+mongoose.connect(MONGO_URI, {
+  serverSelectionTimeoutMS: 15000
+})
+.then(() => console.log("MongoDB CONNECTED"))
+.catch(err => console.log("MongoDB ERROR:", err.message))
 
 // =========================
-// DATABASE SCHEMAS
+// DATABASE
 // =========================
 const User = mongoose.model("User", new mongoose.Schema({
   key: String,
-  role: { type: String, default: "user" },
+  role: {
+    type: String,
+    default: "user"
+  },
   expired: Number,
   createdAt: Number
 }))
@@ -47,25 +53,45 @@ const Session = mongoose.model("Session", new mongoose.Schema({
 
 const GroupSettings = mongoose.model("GroupSettings", new mongoose.Schema({
   group: String,
-  antilink: { type: Boolean, default: false },
-  maxwarn: { type: Number, default: 3 },
-  filterchat: { type: [String], default: [] },
-  warns: { type: Object, default: {} }
+  antilink: {
+    type: Boolean,
+    default: false
+  },
+  maxwarn: {
+    type: Number,
+    default: 3
+  },
+  filterchat: {
+    type: [String],
+    default: []
+  },
+  warns: {
+    type: Object,
+    default: {}
+  }
 }))
 
 // =========================
-// EXPRESS SERVER
+// EXPRESS
 // =========================
 const app = express()
-app.get("/", (_, res) => res.send("BOT ACTIVE"))
-app.listen(3000, () => console.log("Express Running on Port 3000"))
+app.get("/", (_, res) => {
+  res.send("BOT ACTIVE")
+})
+app.listen(3000, () => {
+  console.log("Express Running")
+})
 
 // =========================
-// UTILS
+// FORMAT
 // =========================
 function format(ms) {
-  if (!ms || ms === 9999999999999) return "Permanent"
-  return new Date(ms).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })
+  if (!ms || ms === 9999999999999) {
+    return "Permanent"
+  }
+  return new Date(ms).toLocaleString("id-ID", {
+    timeZone: "Asia/Jakarta"
+  })
 }
 
 function isLink(text) {
@@ -83,18 +109,48 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     logger: P({ level: "silent" }),
-    auth: state,
-    printQRInTerminal: false
+    auth: state
   })
 
   sock.ev.on("creds.update", saveCreds)
 
   sock.ev.on("connection.update", ({ connection, qr, lastDisconnect }) => {
-    if (qr) qrcode.generate(qr, { small: true })
-    if (connection === "open") console.log("✅ BOT ONLINE")
+    if (qr) {
+      qrcode.generate(qr, { small: true })
+    }
+    if (connection === "open") {
+      console.log("BOT ONLINE")
+    }
     if (connection === "close") {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
-      if (shouldReconnect) startBot()
+      if (shouldReconnect) {
+        startBot()
+      }
+    }
+  })
+
+  sock.ev.on("group-participants.update", async (m) => {
+    try {
+      if (m.action === "add") {
+        for (let p of m.participants) {
+          await sock.sendMessage(m.id, {
+            image: fs.existsSync("./welcome.jpg") ? fs.readFileSync("./welcome.jpg") : { url: "https://placehold.co/600x400?text=Welcome" },
+            caption: `👋 Welcome @${p.split("@")[0]}`,
+            mentions: [p]
+          })
+        }
+      }
+      if (m.action === "remove") {
+        for (let p of m.participants) {
+          await sock.sendMessage(m.id, {
+            image: fs.existsSync("./keluar.jpg") ? fs.readFileSync("./keluar.jpg") : { url: "https://placehold.co/600x400?text=Goodbye" },
+            caption: `👋 @${p.split("@")[0]} keluar`,
+            mentions: [p]
+          })
+        }
+      }
+    } catch (e) {
+      console.log(e)
     }
   })
 
@@ -102,7 +158,9 @@ async function startBot() {
     try {
       const msg = messages[0]
       if (!msg.message || msg.key.remoteJid === "status@broadcast") return
-      if (msg.key.fromMe) return // Hindari bot memproses pesannya sendiri
+      
+      // FIX: Bot tidak memproses pesannya sendiri
+      if (msg.key.fromMe) return
 
       const from = msg.key.remoteJid
       const sender = (msg.key.participant || from).split(":")[0] + "@s.whatsapp.net"
@@ -110,63 +168,65 @@ async function startBot() {
       const botNumber = sock.user.id.split(":")[0] + "@s.whatsapp.net"
 
       const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ""
+      if (!text) return
+
       const command = text.trim().split(" ")[0].toLowerCase()
 
       // =========================
-      // SETTINGS & REALTIME ADMIN CHECK
+      // SETTINGS
       // =========================
       let settings = await GroupSettings.findOne({ group: from })
-      if (!settings && isGroup) settings = await GroupSettings.create({ group: from })
-
-      let isAdmin = false
-      let botAdmin = false
-
-      if (isGroup) {
-        // Ambil metadata grup (Jika gagal deteksi admin, Baileys butuh fetch ulang)
-        const groupMetadata = await sock.groupMetadata(from).catch(() => null)
-        if (groupMetadata) {
-          const participants = groupMetadata.participants
-          isAdmin = participants.find(p => p.id === sender)?.admin !== null && participants.find(p => p.id === sender)?.admin !== undefined
-          botAdmin = participants.find(p => p.id === botNumber)?.admin !== null && participants.find(p => p.id === botNumber)?.admin !== undefined
-        }
+      if (!settings && isGroup) {
+        settings = await GroupSettings.create({ group: from })
       }
 
       // =========================
-      // LOGIKA FILTER CHAT (ANTI-SELF-DELETE)
+      // FIX: REALTIME ADMIN CHECK
+      // =========================
+      let isAdmin = false
+      let botAdmin = false
+      if (isGroup) {
+        const meta = await sock.groupMetadata(from)
+        isAdmin = meta.participants.find(x => x.id === sender)?.admin !== null && meta.participants.find(x => x.id === sender)?.admin !== undefined
+        botAdmin = meta.participants.find(x => x.id === botNumber)?.admin !== null && meta.participants.find(x => x.id === botNumber)?.admin !== undefined
+      }
+
+      // =========================
+      // FIX: FILTER CHAT (Check if not command)
       // =========================
       if (isGroup && settings?.filterchat?.length > 0 && !isAdmin && !command.startsWith(".filterchat")) {
-        const lowerText = text.toLowerCase()
-        const hasBadWord = settings.filterchat.some(word => lowerText.includes(word.toLowerCase()))
-        if (hasBadWord) {
+        const badWord = settings.filterchat.find(x => text.toLowerCase().includes(x.toLowerCase()))
+        if (badWord) {
           return await sock.sendMessage(from, { delete: msg.key })
         }
       }
 
       // =========================
-      // LOGIKA ANTILINK (STRICT ADMIN)
+      // ANTILINK
       // =========================
-      if (isGroup && settings?.antilink && isLink(text) && !isAdmin && sender !== OWNER_NUMBER + "@s.whatsapp.net") {
+      if (settings?.antilink && isGroup && isLink(text) && !isAdmin && sender !== OWNER_NUMBER + "@s.whatsapp.net") {
         if (botAdmin) {
           await sock.sendMessage(from, { delete: msg.key })
           
           let warns = settings.warns || {}
           warns[sender] = (warns[sender] || 0) + 1
           settings.warns = warns
-          settings.markModified('warns')
+          settings.markModified('warns') 
           await settings.save()
 
           if (warns[sender] >= settings.maxwarn) {
             await sock.sendMessage(from, {
-              text: `🚫 @${sender.split("@")[0]} dikeluarkan karena limit link tercapai!`,
+              text: `🚫 @${sender.split("@")[0]} dikeluar karena mencapai batas link!`,
               mentions: [sender]
             })
             await sock.groupParticipantsUpdate(from, [sender], "remove")
             delete warns[sender]
+            settings.warns = warns
             settings.markModified('warns')
             await settings.save()
           } else {
             return sock.sendMessage(from, {
-              text: `⚠️ Warning ${warns[sender]}/${settings.maxwarn}\nJangan kirim link!\nSisa kesempatan: ${settings.maxwarn - warns[sender]}`,
+              text: `⚠️ Warning ${warns[sender]}/${settings.maxwarn}\nJangan kirim link!\nSisa: ${settings.maxwarn - warns[sender]}`,
               mentions: [sender]
             })
           }
@@ -175,110 +235,144 @@ async function startBot() {
       }
 
       // =========================
-      // COMMANDS HANDLER
+      // SESSION SYSTEM
       // =========================
       let session = isGroup ? await Session.findOne({ group: from }) : null
 
-      if (command === ".login") {
-        if (!isGroup) return sock.sendMessage(from, { text: "❌ Gunakan di grup!" })
-        const inputKey = text.split(" ")[1]
-        if (!inputKey) return sock.sendMessage(from, { text: "Format: .login KEY-XXXX" })
+      if (!session && command.startsWith(".") && command !== ".login") {
+        if (!isGroup) return
+        return sock.sendMessage(from, { text: "❌ Admin group belum login\n\nSilahkan login:\n.login key" })
+      }
 
-        const isOwner = (inputKey === OWNER_KEY)
-        if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: "❌ Khusus Admin grup!" })
+      // =========================
+      // COMMANDS
+      // =========================
+      if (command === ".login") {
+        if (!isGroup) return sock.sendMessage(from, { text: "❌ Login hanya di group" })
+        const inputKey = text.split(" ")[1]
+        if (!inputKey) return sock.sendMessage(from, { text: ".login KEY-XXXX" })
+
+        const isOwner = inputKey === OWNER_KEY
+        if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: "❌ Hanya admin group" })
 
         if (isOwner) {
           await Session.findOneAndUpdate({ group: from }, {
             group: from, admin: sender, role: "owner", key: inputKey, expired: 9999999999999, loginAt: Date.now()
           }, { upsert: true })
-          return sock.sendMessage(from, { text: "👑 OWNER LOGIN SUCCESS" })
+          return sock.sendMessage(from, { text: "👑 OWNER LOGIN SUCCESS\n✅ Bot aktif" })
         }
 
         const data = await User.findOne({ key: inputKey.trim().toUpperCase() })
-        if (!data || Date.now() > data.expired) return sock.sendMessage(from, { text: "❌ Key salah atau expired!" })
+        if (!data || Date.now() > data.expired) return sock.sendMessage(from, { text: "❌ Key invalid / expired" })
 
         await Session.findOneAndUpdate({ group: from }, {
           group: from, admin: sender, role: data.role, key: data.key, expired: data.expired, loginAt: Date.now()
         }, { upsert: true })
 
         return sock.sendMessage(from, {
-          text: `✅ LOGIN BERHASIL\n👮 Role: ${data.role}\n📅 Exp: ${format(data.expired)}`,
+          text: `✅ LOGIN SUCCESS\n\n👮 Admin: @${sender.split("@")[0]}\n📅 Expired: ${format(data.expired)}`,
           mentions: [sender]
         })
       }
 
-      // Cegah akses fitur jika belum login (kecuali .menu & .owner)
-      if (!session && command.startsWith(".") && ![".menu", ".owner", ".login"].includes(command)) {
-        if (!isGroup) return
-        return sock.sendMessage(from, { text: "❌ Grup ini belum login. Ketik .login <key>" })
+      session = isGroup ? await Session.findOne({ group: from }) : null
+      if (!session) return
+
+      if (session.expired !== 9999999999999 && Date.now() > session.expired) {
+        await Session.deleteOne({ group: from })
+        return sock.sendMessage(from, { text: "❌ Session expired" })
       }
 
-      if (!session) return
       const currentRole = session.role || "user"
+      const userLimit = [".menu", ".linkgroup", ".sticker", ".masaaktif", ".owner", ".contact", ".sewabot"]
 
-      // --- MENU ---
+      if (currentRole === "user" && command.startsWith(".") && !userLimit.includes(command)) {
+        return sock.sendMessage(from, { text: "❌ Akses user terbatas" })
+      }
+
       if (command === ".menu") {
-        let menuTxt = `--- *MENU BOT* ---\nRole Anda: *${currentRole.toUpperCase()}*\n\n`
-        if (currentRole === "owner") {
-          menuTxt += `👑 *OWNER*\n.genkey, .genprem, .antilink, .filterchat, .kick\n\n`
-        } else if (currentRole === "premium") {
-          menuTxt += `⭐ *PREMIUM*\n.antilink, .filterchat, .kick\n\n`
-        }
-        menuTxt += `👤 *USER*\n.sticker, .owner, .masaaktif, .linkgroup`
+        let menuTxt = currentRole === "owner" ? `👑 OWNER MENU\n\n🔑 KEY SYSTEM\n.genkey <hari>\n.genprem <hari>\n\n🛠 PANEL\n.panel\n.addtime <key> <hari>\n.deltime <key> <hari>\n.delkey <key>\n\n👮 GROUP\n.antilink on/off\n.autokick <jumlah>\n.filterchat add <kata>\n.filterchat del <kata>\n.kick\n\n📌 OTHER\n.linkgroup\n.sticker` :
+                     currentRole === "premium" ? `⭐ PREMIUM MENU\n\n👮 GROUP\n.antilink on/off\n.autokick <jumlah>\n.filterchat add <kata>\n.filterchat del <kata>\n.kick\n\n📌 OTHER\n.linkgroup\n.sticker\n.owner` :
+                     `📌 USER MENU\n\n.linkgroup\n.sticker\n.masaaktif\n.owner`
         return sock.sendMessage(from, { text: menuTxt })
       }
 
-      // --- ADMIN FEATURES ---
       if (command === ".antilink") {
-        if (currentRole === "user") return
-        if (!isAdmin) return sock.sendMessage(from, { text: "❌ Khusus Admin grup!" })
+        if (currentRole !== "premium" && currentRole !== "owner") return
+        if (!isAdmin) return sock.sendMessage(from, { text: "❌ Khusus admin" })
         const val = text.split(" ")[1]
-        if (!val) return sock.sendMessage(from, { text: ".antilink on/off" })
+        if (!["on", "off"].includes(val)) return sock.sendMessage(from, { text: ".antilink on/off" })
         settings.antilink = (val === "on")
         await settings.save()
-        return sock.sendMessage(from, { text: `✅ Antilink: ${val.toUpperCase()}` })
+        return sock.sendMessage(from, { text: `✅ Antilink ${val}` })
       }
 
       if (command === ".filterchat") {
-        if (currentRole === "user") return
-        if (!isAdmin) return sock.sendMessage(from, { text: "❌ Khusus Admin grup!" })
+        if (currentRole !== "premium" && currentRole !== "owner") return
+        if (!isAdmin) return sock.sendMessage(from, { text: "❌ Khusus admin" })
         const action = text.split(" ")[1]
         const word = text.split(" ").slice(2).join(" ")
-        if (action === "add" && word) {
-          if (!settings.filterchat.includes(word)) settings.filterchat.push(word)
-          await settings.save()
-          return sock.sendMessage(from, { text: `✅ Berhasil menambah filter: ${word}` })
+        if (!action) return sock.sendMessage(from, { text: ".filterchat add kata\n.filterchat del kata" })
+
+        if (action === "add") {
+          if (!word) return
+          if (!settings.filterchat.includes(word)) {
+            settings.filterchat.push(word)
+            await settings.save()
+          }
+          return sock.sendMessage(from, { text: `✅ Ditambahkan: ${word}` })
         }
-        if (action === "del" && word) {
+        if (action === "del") {
           settings.filterchat = settings.filterchat.filter(x => x !== word)
           await settings.save()
-          return sock.sendMessage(from, { text: `✅ Berhasil menghapus filter: ${word}` })
+          return sock.sendMessage(from, { text: `✅ Dihapus: ${word}` })
         }
       }
 
       if (command === ".kick") {
-        if (currentRole === "user") return
-        if (!isAdmin || !botAdmin) return sock.sendMessage(from, { text: "❌ Pastikan bot & anda adalah Admin!" })
-        let target = msg.message.extendedTextMessage?.contextInfo?.participant || (text.split(" ")[1]?.replace(/[^0-9]/g, "") + "@s.whatsapp.net")
-        if (!target || target.length < 10) return sock.sendMessage(from, { text: "Tag orangnya!" })
+        if (currentRole !== "premium" && currentRole !== "owner") return
+        if (!isAdmin) return sock.sendMessage(from, { text: "❌ Khusus admin" })
+        if (!botAdmin) return sock.sendMessage(from, { text: "❌ Bot bukan admin" })
+        let target = msg.message.extendedTextMessage?.contextInfo?.participant || (text.split(" ")[1] ? text.split(" ")[1].replace(/[^0-9]/g, "") + "@s.whatsapp.net" : null)
+        if (!target) return sock.sendMessage(from, { text: "Tag atau masukkan nomor" })
         await sock.groupParticipantsUpdate(from, [target], "remove")
-        return sock.sendMessage(from, { text: "✅ Target dikeluarkan." })
+        return sock.sendMessage(from, { text: "✅ Berhasil kick" })
       }
 
-      if (command === ".masaaktif") {
-        return sock.sendMessage(from, { text: `📅 Sisa Masa Aktif:\n${format(session.expired)}` })
+      if (command === ".linkgroup") {
+        if (!botAdmin) return sock.sendMessage(from, { text: "❌ Bot bukan admin" })
+        const code = await sock.groupInviteCode(from)
+        return sock.sendMessage(from, { text: "https://chat.whatsapp.com/" + code })
       }
 
       if (command === ".genkey" && currentRole === "owner") {
-        const hari = parseInt(text.split(" ")[1]) || 7
-        const key = "KEY-" + Math.random().toString(36).slice(2, 8).toUpperCase()
+        const hari = parseInt(text.split(" ")[1])
+        if (!hari) return sock.sendMessage(from, { text: ".genkey 7" })
+        const key = "KEY-" + Math.random().toString(36).slice(2, 10).toUpperCase()
         const exp = Date.now() + (hari * 86400000)
         await User.create({ key, role: "user", expired: exp, createdAt: Date.now() })
-        return sock.sendMessage(from, { text: `✅ USER KEY: ${key}\nDurasi: ${hari} Hari` })
+        return sock.sendMessage(from, { text: `✅ USER KEY\n\n🔑 ${key}\n⏳ ${hari} Hari\n📅 ${format(exp)}` })
+      }
+
+      if (command === ".genprem" && currentRole === "owner") {
+        const hari = parseInt(text.split(" ")[1])
+        if (!hari) return sock.sendMessage(from, { text: ".genprem 30" })
+        const key = "PREM-" + Math.random().toString(36).slice(2, 10).toUpperCase()
+        const exp = Date.now() + (hari * 86400000)
+        await User.create({ key, role: "premium", expired: exp, createdAt: Date.now() })
+        return sock.sendMessage(from, { text: `⭐ PREMIUM KEY\n\n🔑 ${key}\n⏳ ${hari} Hari\n📅 ${format(exp)}` })
+      }
+
+      if (command === ".masaaktif") {
+        return sock.sendMessage(from, { text: `📅 MASA AKTIF BOT\n\nExpired:\n${format(session.expired)}` })
+      }
+      
+      if (command === ".owner") {
+         return sock.sendMessage(from, { text: `📞 CONTACT OWNER\n\nwa.me/${OWNER_NUMBER}` })
       }
 
     } catch (e) {
-      console.log("Error logic:", e)
+      console.log("ERROR:", e.message)
     }
   })
 }
