@@ -358,7 +358,7 @@ async function startBot() {
           })
       }
 // =========================
-// ADMIN CHECK FINAL FIX
+// ADMIN CHECK FINAL LID FIX
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -377,14 +377,6 @@ if (isGroup) {
     )
 
   // =========================
-  // BOT NUMBER
-  // =========================
-  const botNumber =
-    normalize(
-      sock.user.id
-    )
-
-  // =========================
   // MEMBER DATA
   // =========================
   const member =
@@ -398,22 +390,51 @@ if (isGroup) {
   // =========================
   // BOT DATA
   // =========================
-  const bot =
+  let bot =
     meta.participants.find(x => {
 
+      // cocokkan langsung full id
       return (
-        normalize(x.id) === botNumber
+        x.id === sock.user.id
       )
     })
 
   // =========================
+  // FALLBACK LID
+  // =========================
+  if (!bot && sock.user.lid) {
+
+    bot =
+      meta.participants.find(x => {
+
+        return (
+          x.id === sock.user.lid
+        )
+      })
+  }
+
+  // =========================
+  // FALLBACK NORMALIZE
+  // =========================
+  if (!bot) {
+
+    const botNumber =
+      normalize(sock.user.id)
+
+    bot =
+      meta.participants.find(x => {
+
+        return (
+          normalize(x.id) === botNumber
+        )
+      })
+  }
+
+  // =========================
   // CHECK ADMIN
   // =========================
-  isAdmin =
-    !!member?.admin
-
-  botAdmin =
-    !!bot?.admin
+  isAdmin = !!member?.admin
+  botAdmin = !!bot?.admin
 
   // =========================
   // DEBUG
@@ -421,36 +442,23 @@ if (isGroup) {
   console.log("===== ADMIN CHECK =====")
 
   console.log(
-    "BOT USER ID:",
+    "sock.user.id:",
     sock.user.id
   )
 
   console.log(
-    "BOT NUMBER:",
-    botNumber
+    "sock.user.lid:",
+    sock.user.lid
   )
 
   console.log(
-    "GROUP PARTICIPANTS:"
-  )
-
-  meta.participants.forEach(v => {
-
-    console.log({
-      id: v.id,
-      normalized: normalize(v.id),
-      admin: v.admin
-    })
-  })
-
-  console.log(
-    "MEMBER:",
-    member
-  )
-
-  console.log(
-    "BOT:",
+    "BOT DATA:",
     bot
+  )
+
+  console.log(
+    "BOT ADMIN:",
+    bot?.admin
   )
 
   console.log(
