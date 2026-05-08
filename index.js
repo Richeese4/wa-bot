@@ -202,226 +202,214 @@ async function startBot() {
     }
   })
 
-  // =========================
-  // MESSAGE
-  // =========================
-  sock.ev.on("messages.upsert", async ({ messages }) => {
+```js
+// =========================
+// MESSAGE
+// =========================
+sock.ev.on("messages.upsert", async ({ messages }) => {
 
-    try {
+  try {
 
-      const msg = messages[0]
-      if (!msg.message) return
+    const msg = messages[0]
 
-      if (msg.key.remoteJid === "status@broadcast")
-        return
+    if (!msg.message) return
 
-      const from = msg.key.remoteJid
+    if (msg.key.remoteJid === "status@broadcast")
+      return
 
-      if (!from) return
+    const from = msg.key.remoteJid
 
-      const sender =
-        (msg.key.participant || from)
-        .split(":")[0]
+    if (!from) return
 
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        ""
+    const isGroup =
+      from.endsWith("@g.us")
 
-      if (!text) return
+    // =========================
+    // SENDER
+    // =========================
+    const sender =
+      (msg.key.participant || from)
+        .replace(/:\d+/g, "")
+        .replace("@s.whatsapp.net", "")
 
-      const cmd = text.trim()
+    // =========================
+    // TEXT
+    // =========================
+    const text =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text ||
+      msg.message.imageMessage?.caption ||
+      msg.message.videoMessage?.caption ||
+      ""
 
-      const command =
-        cmd.split(" ")[0].toLowerCase()
+    if (!text) return
 
-      const isGroup =
-        from.endsWith("@g.us")
+    const cmd = text.trim()
 
-      // =========================
-      // SETTINGS
-      // =========================
-      let settings =
-        await GroupSettings.findOne({
+    const command =
+      cmd.split(" ")[0].toLowerCase()
+
+    // =========================
+    // SETTINGS
+    // =========================
+    let settings =
+      await GroupSettings.findOne({
+        group: from
+      })
+
+    if (!settings) {
+
+      settings =
+        await GroupSettings.create({
           group: from
         })
+    }
 
-      if (!settings) {
+    // =========================
+    // SESSION
+    // =========================
+    let session = null
 
-        settings =
-          await GroupSettings.create({
-            group: from
-          })
-      }
+    if (isGroup) {
 
-// =========================
-// ADMIN CHECK
-// =========================
-let isAdmin = false
-let botAdmin = false
+      session =
+        await Session.findOne({
+          group: from
+        })
+    }
 
-if (isGroup) {
+    // =========================
+    // ADMIN CHECK
+    // =========================
+    let isAdmin = false
+    let botAdmin = false
 
-  const meta =
-    await sock.groupMetadata(from)
+    if (isGroup) {
 
-  // nomor sender asli
-  const senderId =
-    sender.split("@")[0]
+      const meta =
+        await sock.groupMetadata(from)
 
-  // nomor bot asli
-  const botId =
-    sock.user.id.split(":")[0]
-
-  // cari member
-  const member =
-    meta.participants.find(x => {
-
-      const id =
-        x.id.split(":")[0]
-
-      return (
-        id === senderId ||
-        x.id.includes(senderId)
-      )
-    })
-
-  // cari bot
-  const bot =
-    meta.participants.find(x => {
-
-      const id =
-        x.id.split(":")[0]
-
-      return (
-        id === botId ||
-        x.id.includes(botId)
-      )
-    })
-
-  // cek admin
-  isAdmin =
-    member?.admin === "admin" ||
-    member?.admin === "superadmin"
-
-  botAdmin =
-    bot?.admin === "admin" ||
-    bot?.admin === "superadmin"
-
-  console.log({
-    sender: senderId,
-    bot: botId,
-    memberFound: !!member,
-    botFound: !!bot,
-    isAdmin,
-    botAdmin
-  })
-}
+      // normalize bot id
+      const botId =
+        sock.user.id
+          .replace(/:\d+/g, "")
+          .replace("@s.whatsapp.net", "")
 
       // =========================
-      // BLOCK BELUM LOGIN
+      // MEMBER
       // =========================
-      if (
-        !session &&
-        command.startsWith(".") &&
-        command !== ".login"
-      ) {
+      const member =
+        meta.participants.find(x => {
 
-        return sock.sendMessage(from, {
-          text:
+          const id =
+            x.id
+              .replace(/:\d+/g, "")
+              .replace("@s.whatsapp.net", "")
+
+          return id === sender
+        })
+
+      // =========================
+      // BOT
+      // =========================
+      const bot =
+        meta.participants.find(x => {
+
+          const id =
+            x.id
+              .replace(/:\d+/g, "")
+              .replace("@s.whatsapp.net", "")
+
+          return id === botId
+        })
+
+      // =========================
+      // CHECK ADMIN
+      // =========================
+      isAdmin =
+        member?.admin === "admin" ||
+        member?.admin === "superadmin"
+
+      botAdmin =
+        bot?.admin === "admin" ||
+        bot?.admin === "superadmin"
+
+      console.log({
+        sender,
+        bot: botId,
+        memberFound: !!member,
+        botFound: !!bot,
+        isAdmin,
+        botAdmin
+      })
+    }
+
+    // =========================
+    // BLOCK BELUM LOGIN
+    // =========================
+    if (
+      !session &&
+      command.startsWith(".") &&
+      command !== ".login"
+    ) {
+
+      return sock.sendMessage(from, {
+        text:
 `❌ Admin group belum login
 
 Silahkan login:
 .login key`
+      })
+    }
+
+    // =========================
+    // LOGIN
+    // =========================
+    if (command === ".login") {
+
+      if (!isGroup) {
+
+        return sock.sendMessage(from, {
+          text:
+            "❌ Login hanya di group"
+        })
+      }
+
+      const inputKey =
+        cmd.split(" ")[1]
+
+      if (!inputKey) {
+
+        return sock.sendMessage(from, {
+          text:
+`.login KEY-XXXX`
+        })
+      }
+
+      const isOwner =
+        inputKey === OWNER_KEY
+
+      if (!isAdmin && !isOwner) {
+
+        return sock.sendMessage(from, {
+          text:
+            "❌ Hanya admin group"
         })
       }
 
       // =========================
-      // LOGIN
+      // OWNER LOGIN
       // =========================
-      if (command === ".login") {
-
-        if (!isGroup) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Login hanya di group"
-          })
-        }
-
-        const inputKey =
-          cmd.split(" ")[1]
-
-        if (!inputKey) {
-
-          return sock.sendMessage(from, {
-            text:
-`.login KEY-XXXX`
-          })
-        }
-
-        const isOwner =
-          inputKey === OWNER_KEY
-
-        if (!isAdmin && !isOwner) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Hanya admin group"
-          })
-        }
-
-        // OWNER LOGIN
-        if (isOwner) {
-
-          await Session.findOneAndUpdate(
-            { group: from },
-            {
-              group: from,
-              admin: sender,
-              role: "owner",
-              key: inputKey,
-              expired: 9999999999999,
-              loginAt: Date.now()
-            },
-            { upsert: true }
-          )
-
-          return sock.sendMessage(from, {
-            text:
-`👑 OWNER LOGIN SUCCESS
-
-✅ Bot aktif`
-          })
-        }
-
-        // USER LOGIN
-        const data =
-          await User.findOne({
-            key: inputKey
-              .trim()
-              .toUpperCase()
-          })
-
-        if (
-          !data ||
-          Date.now() > data.expired
-        ) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Key invalid / expired"
-          })
-        }
+      if (isOwner) {
 
         await Session.findOneAndUpdate(
           { group: from },
           {
             group: from,
             admin: sender,
-            role: data.role,
-            key: data.key,
-            expired: data.expired,
+            role: "owner",
+            key: inputKey,
+            expired: 9999999999999,
             loginAt: Date.now()
           },
           { upsert: true }
@@ -429,73 +417,130 @@ Silahkan login:
 
         return sock.sendMessage(from, {
           text:
-`✅ LOGIN SUCCESS
+`👑 OWNER LOGIN SUCCESS
 
-👮 Admin:
-@${sender.split("@")[0]}
-
-📅 Expired:
-${format(data.expired)}`,
-          mentions: [sender]
+✅ Bot aktif`
         })
       }
 
       // =========================
-      // REFRESH SESSION
+      // USER LOGIN
       // =========================
+      const data =
+        await User.findOne({
+          key: inputKey
+            .trim()
+            .toUpperCase()
+        })
+
+      if (
+        !data ||
+        Date.now() > data.expired
+      ) {
+
+        return sock.sendMessage(from, {
+          text:
+            "❌ Key invalid / expired"
+        })
+      }
+
+      await Session.findOneAndUpdate(
+        { group: from },
+        {
+          group: from,
+          admin: sender,
+          role: data.role,
+          key: data.key,
+          expired: data.expired,
+          loginAt: Date.now()
+        },
+        { upsert: true }
+      )
+
+      return sock.sendMessage(from, {
+        text:
+`✅ LOGIN SUCCESS
+
+👮 Admin:
+@${sender}
+
+📅 Expired:
+${format(data.expired)}`,
+        mentions: [`${sender}@s.whatsapp.net`]
+      })
+    }
+
+    // =========================
+    // REFRESH SESSION
+    // =========================
+    if (isGroup) {
+
       session =
         await Session.findOne({
           group: from
         })
+    }
 
-      if (!session) return
+    if (!session) return
 
-      const currentRole =
-        session.role || "user"
+    // =========================
+    // ROLE
+    // =========================
+    const currentRole =
+      session?.role || "user"
 
-      // =========================
-      // EXPIRED
-      // =========================
-      if (
-        session.expired !== 9999999999999 &&
-        Date.now() > session.expired
-      ) {
+    // =========================
+    // EXPIRED
+    // =========================
+    if (
+      session?.expired !== 9999999999999 &&
+      Date.now() > session?.expired
+    ) {
 
-        await Session.deleteOne({
-          group: from
-        })
+      await Session.deleteOne({
+        group: from
+      })
 
-        return sock.sendMessage(from, {
-          text:
-            "❌ Session expired"
-        })
-      }
+      return sock.sendMessage(from, {
+        text:
+          "❌ Session expired"
+      })
+    }
 
-      // =========================
-      // USER LIMIT
-      // =========================
-      const userLimit = [
-        ".menu",
-        ".linkgroup",
-        ".sticker",
-        ".masaaktif",
-        ".owner",
-        ".contact",
-        ".sewabot"
-      ]
+    // =========================
+    // USER LIMIT
+    // =========================
+    const userLimit = [
+      ".menu",
+      ".linkgroup",
+      ".sticker",
+      ".masaaktif",
+      ".owner",
+      ".contact",
+      ".sewabot"
+    ]
 
-      if (
-        currentRole === "user" &&
-        command.startsWith(".") &&
-        !userLimit.includes(command)
-      ) {
+    if (
+      currentRole === "user" &&
+      command.startsWith(".") &&
+      !userLimit.includes(command)
+    ) {
 
-        return sock.sendMessage(from, {
-          text:
-            "❌ Akses user terbatas"
-        })
-      }
+      return sock.sendMessage(from, {
+        text:
+          "❌ Akses user terbatas"
+      })
+    }
 
+  } catch (e) {
+
+    console.log(
+      "ERROR:",
+      e
+    )
+  }
+})
+'''  
       // =========================
       // FILTER CHAT
       // =========================
