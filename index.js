@@ -645,23 +645,35 @@ ${format(data.expired)}`,
       const currentRole =
         session?.role || "user"
 
-      // =========================
-      // EXPIRED
-      // =========================
-      if (
-        session?.expired !== 9999999999999 &&
-        Date.now() > session?.expired
-      ) {
+// =========================
+// EXPIRED
+// =========================
+if (
+  session?.expired !== 9999999999999 &&
+  Date.now() > session?.expired
+) {
 
-        await Session.deleteOne({
-          group: from
-        })
+  // HAPUS SESSION GROUP
+  await Session.deleteOne({
+    group: from
+  })
 
-        return sock.sendMessage(from, {
-          text:
-            "❌ Session expired"
-        })
-      }
+  // HAPUS KEY EXPIRED DARI PANEL
+  await User.deleteOne({
+    key: session.key
+  })
+
+  return sock.sendMessage(from, {
+    text:
+`❌ KEY SUDAH EXPIRED
+
+🔑 Key:
+${session.key}
+
+📞 Silahkan perpanjang ke owner:
+wa.me/${OWNER_NUMBER}`
+  })
+}
 
       // =========================
       // USER LIMIT
@@ -834,6 +846,32 @@ Sisa warning: ${left}`,
       // MENU
       // =========================
       if (command === ".menu") {
+
+      // CEK SESSION EXPIRED SAAT MENU
+if (
+  session?.expired !== 9999999999999 &&
+  Date.now() > session?.expired
+) {
+
+  // HAPUS SESSION
+  await Session.deleteOne({
+    group: from
+  })
+
+  // HAPUS KEY EXPIRED
+  await User.deleteOne({
+    key: session.key
+  })
+
+  return sock.sendMessage(from, {
+    text:
+`❌ KEY SUDAH EXPIRED
+
+📞 Hubungi owner untuk perpanjang:
+
+wa.me/${OWNER_NUMBER}`
+  })
+}
 
         // OWNER
         if (currentRole === "owner") {
