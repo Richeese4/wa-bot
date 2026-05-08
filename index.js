@@ -104,15 +104,24 @@ function format(ms) {
   })
 }
 
-// =========================
-// DETECT LINK
-// =========================
 function isLink(text) {
 
   const regex =
     /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me)/gi
 
   return regex.test(text)
+}
+
+// =========================
+// NORMALIZE ID
+// =========================
+function normalize(id = "") {
+
+  return id
+    .replace(/:\d+/g, "")
+    .replace("@s.whatsapp.net", "")
+    .replace("@lid", "")
+    .trim()
 }
 
 // =========================
@@ -166,35 +175,6 @@ async function startBot() {
 
       if (shouldReconnect) {
         startBot()
-      }
-    }
-  })
-
-  // =========================
-  // AUTO TOLAK PANGGILAN
-  // =========================
-  sock.ev.on("call", async (calls) => {
-
-    for (const call of calls) {
-
-      if (call.status === "offer") {
-
-        await sock.rejectCall(
-          call.id,
-          call.from
-        )
-
-        await sock.sendMessage(call.from, {
-          text:
-`❌ Panggilan otomatis ditolak
-
-Silahkan chat bot saja.`
-        })
-
-        console.log(
-          "AUTO REJECT CALL:",
-          call.from
-        )
       }
     }
   })
@@ -288,11 +268,11 @@ Silahkan chat bot saja.`
       // =========================
       // SENDER
       // =========================
-      
-const sender =
-  (msg.key.participant || from)
-    .replace(/:\d+/g, "")
-      
+      const sender =
+        normalize(
+          msg.key.participant || from
+        )
+
       // =========================
       // TEXT
       // =========================
@@ -333,85 +313,62 @@ const sender =
       }
 
       // =========================
-      // SESSION
+      // ADMIN CHECK FIX
       // =========================
-      let session = null
+      let isAdmin = false
+      let botAdmin = false
 
       if (isGroup) {
 
-        session =
-          await Session.findOne({
-            group: from
+        const meta =
+          await sock.groupMetadata(from)
+
+        const senderId =
+          normalize(
+            msg.key.participant || from
+          )
+
+        const botId =
+          normalize(sock.user.id)
+
+        const member =
+          meta.participants.find(x => {
+
+            return normalize(x.id) === senderId
           })
+
+        const bot =
+          meta.participants.find(x => {
+
+            return normalize(x.id) === botId
+          })
+
+        isAdmin =
+          member?.admin === "admin" ||
+          member?.admin === "superadmin"
+
+        botAdmin =
+          bot?.admin === "admin" ||
+          bot?.admin === "superadmin"
+
+        console.log({
+          sender: senderId,
+          bot: botId,
+          memberFound: !!member,
+          botFound: !!bot,
+          isAdmin,
+          botAdmin
+        })
       }
 
-// =========================
-// ADMIN CHECK
-// =========================
-let isAdmin = false
-let botAdmin = false
-
-if (isGroup) {
-
-  const meta =
-    await sock.groupMetadata(from)
-
-  // NORMALIZE ID
-  const normalize = (id = "") => {
-
-    return id
-      .replace(/:\d+/g, "")
-      .replace("@s.whatsapp.net", "")
-      .replace("@lid", "")
-      .trim()
-  }
-
-  // sender id
-  const senderId =
-    normalize(
-      msg.key.participant || from
-    )
-
-  // bot id
-  const botId =
-    normalize(sock.user.id)
-
-  // cari member
-  const member =
-    meta.participants.find(x => {
-
-      return (
-        normalize(x.id) === senderId
-      )
-    })
-
-  // cari bot
-  const bot =
-    meta.participants.find(x => {
-
-      return (
-        normalize(x.id) === botId
-      )
-    })
-
-  // admin check
-  isAdmin =
-    member?.admin === "admin" ||
-    member?.admin === "superadmin"
-
-  botAdmin =
-    bot?.admin === "admin" ||
-    bot?.admin === "superadmin"
-
-  console.log({
-    sender: senderId,
-    bot: botId,
-    memberFound: !!member,
-    botFound: !!bot,
-    isAdmin,
-    botAdmin
-  })
-}
+      // =========================
+      // SESSION
+      // =========================
+      let session = isGroup
+        ? await Session.findOne({
+            group: from
+          })
+        : null
 
       // =========================
       // BLOCK BELUM LOGIN
@@ -538,28 +495,22 @@ ${format(data.expired)}`,
       // =========================
       // REFRESH SESSION
       // =========================
-      if (isGroup) {
-
-        session =
-          await Session.findOne({
-            group: from
-          })
-      }
+      session =
+        await Session.findOne({
+          group: from
+        })
 
       if (!session) return
 
-      // =========================
-      // ROLE
-      // =========================
       const currentRole =
-        session?.role || "user"
+        session.role || "user"
 
       // =========================
       // EXPIRED
       // =========================
       if (
-        session?.expired !== 9999999999999 &&
-        Date.now() > session?.expired
+        session.expired !== 9999999999999 &&
+        Date.now() > session.expired
       ) {
 
         await Session.deleteOne({
@@ -598,10 +549,11 @@ ${format(data.expired)}`,
       }
 
       // =========================
-      // FILTER CHAT
+      // FILTER CHAT FIX
       // =========================
       if (
-        settings.filterchat.length > 0
+        settings.filterchat.length > 0 &&
+        !command.startsWith(".filterchat")
       ) {
 
         const bad =
@@ -622,7 +574,7 @@ ${format(data.expired)}`,
       }
 
       // =========================
-      // ANTILINK
+      // ANTILINK FIX
       // =========================
       if (
         settings.antilink &&
@@ -635,7 +587,16 @@ ${format(data.expired)}`,
           sender.includes(OWNER_NUMBER)
         ) return
 
-        if (!botAdmin) return
+        // FIX BOT ADMIN CHECK
+        if (!botAdmin) {
+
+          console.log("BOT BUKAN ADMIN")
+
+          return sock.sendMessage(from, {
+            text:
+              "❌ Bot harus jadi admin untuk menghapus link"
+          })
+        }
 
         const warns =
           settings.warns || {}
@@ -709,7 +670,6 @@ Sisa warning: ${left}`,
       // =========================
       if (command === ".menu") {
 
-        // OWNER
         if (currentRole === "owner") {
 
           return sock.sendMessage(from, {
@@ -739,7 +699,6 @@ Sisa warning: ${left}`,
           })
         }
 
-        // PREMIUM
         if (currentRole === "premium") {
 
           return sock.sendMessage(from, {
@@ -760,7 +719,6 @@ Sisa warning: ${left}`,
           })
         }
 
-        // USER
         return sock.sendMessage(from, {
           text:
 `📌 USER MENU
@@ -773,55 +731,77 @@ Sisa warning: ${left}`,
       }
 
       // =========================
-      // OWNER MENU
+      // FILTERCHAT
       // =========================
-      if (command === ".owner") {
+      if (command === ".filterchat") {
 
-        if (currentRole === "owner")
-          return
+        if (
+          currentRole !== "premium" &&
+          currentRole !== "owner"
+        ) return
 
-        return sock.sendMessage(from, {
-          text:
-`👑 OWNER MENU
+        if (!isAdmin) {
 
-.contact
-.sewabot`
-        })
-      }
+          return sock.sendMessage(from, {
+            text:
+              "❌ Khusus admin"
+          })
+        }
 
-      // =========================
-      // CONTACT
-      // =========================
-      if (command === ".contact") {
+        const action =
+          cmd.split(" ")[1]
 
-        return sock.sendMessage(from, {
-          text:
-`📞 CONTACT OWNER
+        const word =
+          cmd.split(" ")
+          .slice(2)
+          .join(" ")
 
-wa.me/${OWNER_NUMBER}`
-        })
-      }
+        if (!action) {
 
-      // =========================
-      // SEWABOT
-      // =========================
-      if (command === ".sewabot") {
+          return sock.sendMessage(from, {
+            text:
+`.filterchat add kata
+.filterchat del kata`
+          })
+        }
 
-        return sock.sendMessage(from, {
-          text:
-`📦 LIST SEWA BOT
+        // ADD
+        if (action === "add") {
 
-⭐ USER
-5K = 7 Hari
-10K = 30 Hari
+          if (!word) return
 
-👑 PREMIUM
-15K = 30 Hari
-25K = 90 Hari
+          if (
+            !settings.filterchat.includes(word)
+          ) {
 
-📞 ORDER:
-wa.me/${OWNER_NUMBER}`
-        })
+            settings.filterchat.push(word)
+
+            await settings.save()
+          }
+
+          return sock.sendMessage(from, {
+            text:
+`✅ Ditambahkan:
+${word}`
+          })
+        }
+
+        // DELETE
+        if (action === "del") {
+
+          settings.filterchat =
+            settings.filterchat.filter(
+              x => x !== word
+            )
+
+          await settings.save()
+
+          return sock.sendMessage(from, {
+            text:
+`✅ Dihapus:
+${word}`
+          })
+        }
       }
 
       // =========================
@@ -915,82 +895,6 @@ ${jumlah} warning`
       }
 
       // =========================
-      // FILTER CHAT
-      // =========================
-      if (command === ".filterchat") {
-
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
-
-        if (!isAdmin) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
-        }
-
-        const action =
-          cmd.split(" ")[1]
-
-        const word =
-          cmd.split(" ")
-          .slice(2)
-          .join(" ")
-
-        if (!action) {
-
-          return sock.sendMessage(from, {
-            text:
-`.filterchat add kata
-.filterchat del kata`
-          })
-        }
-
-        // ADD
-        if (action === "add") {
-
-          if (!word) return
-
-          if (
-            !settings.filterchat
-            .includes(word)
-          ) {
-
-            settings.filterchat
-            .push(word)
-
-            await settings.save()
-          }
-
-          return sock.sendMessage(from, {
-            text:
-`✅ Ditambahkan:
-${word}`
-          })
-        }
-
-        // DELETE
-        if (action === "del") {
-
-          settings.filterchat =
-            settings.filterchat.filter(
-              x => x !== word
-            )
-
-          await settings.save()
-
-          return sock.sendMessage(from, {
-            text:
-`✅ Dihapus:
-${word}`
-          })
-        }
-      }
-
-      // =========================
       // KICK
       // =========================
       if (command === ".kick") {
@@ -1018,7 +922,6 @@ ${word}`
 
         let target
 
-        // reply
         if (
           msg.message
           .extendedTextMessage
@@ -1033,7 +936,6 @@ ${word}`
             .participant
         }
 
-        // nomor
         else {
 
           const nomor =
@@ -1105,6 +1007,41 @@ ${format(session.expired)}`
       }
 
       // =========================
+      // CONTACT
+      // =========================
+      if (command === ".contact") {
+
+        return sock.sendMessage(from, {
+          text:
+`📞 CONTACT OWNER
+
+wa.me/${OWNER_NUMBER}`
+        })
+      }
+
+      // =========================
+      // SEWABOT
+      // =========================
+      if (command === ".sewabot") {
+
+        return sock.sendMessage(from, {
+          text:
+`📦 LIST SEWA BOT
+
+⭐ USER
+5K = 7 Hari
+10K = 30 Hari
+
+👑 PREMIUM
+15K = 30 Hari
+25K = 90 Hari
+
+📞 ORDER:
+wa.me/${OWNER_NUMBER}`
+        })
+      }
+
+      // =========================
       // GENKEY USER
       // =========================
       if (command === ".genkey") {
@@ -1113,9 +1050,7 @@ ${format(session.expired)}`
           return
 
         const hari =
-          parseInt(
-            cmd.split(" ")[1]
-          )
+          parseInt(cmd.split(" ")[1])
 
         if (!hari) {
 
@@ -1134,10 +1069,7 @@ ${format(session.expired)}`
 
         const exp =
           Date.now() +
-          (
-            hari *
-            86400000
-          )
+          (hari * 86400000)
 
         await User.create({
           key,
@@ -1158,7 +1090,7 @@ ${format(session.expired)}`
       }
 
       // =========================
-      // GENKEY PREMIUM
+      // GENPREM
       // =========================
       if (command === ".genprem") {
 
@@ -1166,9 +1098,7 @@ ${format(session.expired)}`
           return
 
         const hari =
-          parseInt(
-            cmd.split(" ")[1]
-          )
+          parseInt(cmd.split(" ")[1])
 
         if (!hari) {
 
@@ -1187,10 +1117,7 @@ ${format(session.expired)}`
 
         const exp =
           Date.now() +
-          (
-            hari *
-            86400000
-          )
+          (hari * 86400000)
 
         await User.create({
           key,
