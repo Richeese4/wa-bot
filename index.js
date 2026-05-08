@@ -717,7 +717,7 @@ ${format(data.expired)}`,
       }
 
 // =========================
-// ANTILINK FIX PERFECT
+// ANTILINK FIX FINAL STABLE
 // =========================
 if (
   settings.antilink &&
@@ -725,17 +725,13 @@ if (
   isLink(text)
 ) {
 
-  // =========================
   // ADMIN & OWNER BYPASS
-  // =========================
   if (
     isAdmin ||
     sender.includes(OWNER_NUMBER)
   ) return
 
-  // =========================
   // BOT HARUS ADMIN
-  // =========================
   if (!botAdmin) {
 
     console.log(
@@ -748,43 +744,42 @@ if (
   // =========================
   // AMBIL WARNING
   // =========================
-  const warns =
-    settings.warns || {}
+  if (!settings.warns) {
+    settings.warns = {}
+  }
 
-  // FIX TYPE
-  warns[sender] =
-    Number(warns[sender] || 0)
+  // PASTIKAN NUMBER
+  const currentWarn =
+    Number(settings.warns[sender] || 0)
 
   // TAMBAH WARNING
-  warns[sender] += 1
+  const totalWarn =
+    currentWarn + 1
 
-  // SAVE
-  settings.warns = warns
+  // SAVE LANGSUNG
+  settings.warns[sender] =
+    totalWarn
+
+  // PAKSA MONGOOSE DETECT PERUBAHAN
+  settings.markModified("warns")
 
   await settings.save()
 
-  // =========================
-  // TOTAL WARNING
-  // =========================
-  const totalWarn =
-    warns[sender]
-
   const maxWarn =
-    settings.maxwarn || 3
+    Number(settings.maxwarn || 3)
 
   // =========================
-  // HAPUS PESAN LINK
+  // HAPUS PESAN
   // =========================
   await sock.sendMessage(from, {
     delete: msg.key
   })
 
   // =========================
-  // SUDAH LIMIT = KICK
+  // LIMIT TERCAPAI
   // =========================
   if (totalWarn >= maxWarn) {
 
-    // KIRIM 3/3 DULU
     await sock.sendMessage(from, {
       text:
 `⚠️ Warning ${totalWarn}/${maxWarn}
@@ -798,12 +793,12 @@ Member akan dikeluarkan`,
       ]
     })
 
-    // DELAY KECIL
+    // DELAY BIAR PESAN MASUK
     await new Promise(resolve =>
-      setTimeout(resolve, 1500)
+      setTimeout(resolve, 2000)
     )
 
-    // KICK
+    // KICK MEMBER
     await sock.groupParticipantsUpdate(
       from,
       [
@@ -813,9 +808,9 @@ Member akan dikeluarkan`,
     )
 
     // RESET WARNING
-    delete warns[sender]
+    delete settings.warns[sender]
 
-    settings.warns = warns
+    settings.markModified("warns")
 
     await settings.save()
 
