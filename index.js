@@ -357,9 +357,8 @@ async function startBot() {
             group: from
           })
       }
-
 // =========================
-// ADMIN CHECK SUPER FIX
+// ADMIN CHECK FINAL FIX
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -381,7 +380,9 @@ if (isGroup) {
   // BOT NUMBER
   // =========================
   const botNumber =
-    normalize(sock.user.id)
+    normalize(
+      sock.user.id
+    )
 
   // =========================
   // MEMBER DATA
@@ -409,23 +410,58 @@ if (isGroup) {
   // CHECK ADMIN
   // =========================
   isAdmin =
-    member?.admin === "admin" ||
-    member?.admin === "superadmin"
+    !!member?.admin
 
   botAdmin =
-    bot?.admin === "admin" ||
-    bot?.admin === "superadmin"
+    !!bot?.admin
 
   // =========================
   // DEBUG
   // =========================
   console.log("===== ADMIN CHECK =====")
-  console.log("Sender :", senderNumber)
-  console.log("Bot Number :", botNumber)
-  console.log("Member Admin :", member?.admin)
-  console.log("Bot Admin :", bot?.admin)
-  console.log("isAdmin :", isAdmin)
-  console.log("botAdmin :", botAdmin)
+
+  console.log(
+    "BOT USER ID:",
+    sock.user.id
+  )
+
+  console.log(
+    "BOT NUMBER:",
+    botNumber
+  )
+
+  console.log(
+    "GROUP PARTICIPANTS:"
+  )
+
+  meta.participants.forEach(v => {
+
+    console.log({
+      id: v.id,
+      normalized: normalize(v.id),
+      admin: v.admin
+    })
+  })
+
+  console.log(
+    "MEMBER:",
+    member
+  )
+
+  console.log(
+    "BOT:",
+    bot
+  )
+
+  console.log(
+    "isAdmin:",
+    isAdmin
+  )
+
+  console.log(
+    "botAdmin:",
+    botAdmin
+  )
 }
       // =========================
       // BLOCK BELUM LOGIN
