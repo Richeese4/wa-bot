@@ -717,7 +717,7 @@ ${format(data.expired)}`,
       }
 
 // =========================
-// ANTILINK FIX FINAL
+// ANTILINK FIX PERFECT
 // =========================
 if (
   settings.antilink &&
@@ -725,13 +725,17 @@ if (
   isLink(text)
 ) {
 
+  // =========================
   // ADMIN & OWNER BYPASS
+  // =========================
   if (
     isAdmin ||
     sender.includes(OWNER_NUMBER)
   ) return
 
+  // =========================
   // BOT HARUS ADMIN
+  // =========================
   if (!botAdmin) {
 
     console.log(
@@ -741,43 +745,65 @@ if (
     return
   }
 
+  // =========================
+  // AMBIL WARNING
+  // =========================
   const warns =
     settings.warns || {}
 
-  if (!warns[sender]) {
-    warns[sender] = 0
-  }
+  // FIX TYPE
+  warns[sender] =
+    Number(warns[sender] || 0)
 
+  // TAMBAH WARNING
   warns[sender] += 1
 
+  // SAVE
   settings.warns = warns
 
   await settings.save()
 
-  const left =
-    settings.maxwarn -
+  // =========================
+  // TOTAL WARNING
+  // =========================
+  const totalWarn =
     warns[sender]
 
-  // HAPUS CHAT LINK
+  const maxWarn =
+    settings.maxwarn || 3
+
+  // =========================
+  // HAPUS PESAN LINK
+  // =========================
   await sock.sendMessage(from, {
     delete: msg.key
   })
 
-  // AUTOKICK
-  if (
-    warns[sender] >=
-    settings.maxwarn
-  ) {
+  // =========================
+  // SUDAH LIMIT = KICK
+  // =========================
+  if (totalWarn >= maxWarn) {
 
+    // KIRIM 3/3 DULU
     await sock.sendMessage(from, {
       text:
-`🚫 @${sender}
-dikeluarkan karena spam link`,
+`⚠️ Warning ${totalWarn}/${maxWarn}
+
+🚫 @${sender}
+melewati batas warning
+
+Member akan dikeluarkan`,
       mentions: [
         `${sender}@s.whatsapp.net`
       ]
     })
 
+    // DELAY KECIL
+    await new Promise(resolve =>
+      setTimeout(resolve, 1500)
+    )
+
+    // KICK
     await sock.groupParticipantsUpdate(
       from,
       [
@@ -786,6 +812,7 @@ dikeluarkan karena spam link`,
       "remove"
     )
 
+    // RESET WARNING
     delete warns[sender]
 
     settings.warns = warns
@@ -795,9 +822,15 @@ dikeluarkan karena spam link`,
     return
   }
 
+  // =========================
+  // BELUM LIMIT
+  // =========================
+  const left =
+    maxWarn - totalWarn
+
   return sock.sendMessage(from, {
     text:
-`⚠️ Warning ${warns[sender]}/${settings.maxwarn}
+`⚠️ Warning ${totalWarn}/${maxWarn}
 
 Jangan kirim link lagi
 
