@@ -717,7 +717,7 @@ ${format(data.expired)}`,
       }
 
 // =========================
-// ANTILINK FIX FINAL STABLE
+// ANTILINK FINAL PERFECT
 // =========================
 if (
   settings.antilink &&
@@ -732,41 +732,41 @@ if (
   ) return
 
   // BOT HARUS ADMIN
-  if (!botAdmin) {
+  if (!botAdmin) return
 
-    console.log(
-      "BOT TIDAK PUNYA AKSES ADMIN"
-    )
-
-    return
-  }
+  // JID ASLI
+  const senderJid =
+    msg.key.participant || from
 
   // =========================
-  // AMBIL WARNING
+  // INIT WARNS
   // =========================
   if (!settings.warns) {
     settings.warns = {}
   }
 
-  // PASTIKAN NUMBER
-  const currentWarn =
+  // WARNING SEKARANG
+  let currentWarn =
     Number(settings.warns[sender] || 0)
-
-  // TAMBAH WARNING
-  const totalWarn =
-    currentWarn + 1
-
-  // SAVE LANGSUNG
-  settings.warns[sender] =
-    totalWarn
-
-  // PAKSA MONGOOSE DETECT PERUBAHAN
-  settings.markModified("warns")
-
-  await settings.save()
 
   const maxWarn =
     Number(settings.maxwarn || 3)
+
+  // TAMBAH WARNING
+  currentWarn++
+
+  // JANGAN LEWAT BATAS
+  if (currentWarn > maxWarn) {
+    currentWarn = maxWarn
+  }
+
+  // SAVE
+  settings.warns[sender] =
+    currentWarn
+
+  settings.markModified("warns")
+
+  await settings.save()
 
   // =========================
   // HAPUS PESAN
@@ -776,43 +776,40 @@ if (
   })
 
   // =========================
-  // LIMIT TERCAPAI
+  // SUDAH LIMIT
   // =========================
-  if (totalWarn >= maxWarn) {
+  if (currentWarn >= maxWarn) {
 
-    await sock.sendMessage(from, {
-      text:
-`⚠️ Warning ${totalWarn}/${maxWarn}
-
-🚫 @${sender}
-melewati batas warning
-
-Member akan dikeluarkan`,
-      mentions: [
-        `${sender}@s.whatsapp.net`
-      ]
-    })
-
-    // DELAY BIAR PESAN MASUK
-    await new Promise(resolve =>
-      setTimeout(resolve, 2000)
-    )
-
-    // KICK MEMBER
-    await sock.groupParticipantsUpdate(
-      from,
-      [
-        `${sender}@s.whatsapp.net`
-      ],
-      "remove"
-    )
-
-    // RESET WARNING
+    // RESET DULU
     delete settings.warns[sender]
 
     settings.markModified("warns")
 
     await settings.save()
+
+    // PESAN
+    await sock.sendMessage(from, {
+      text:
+`⚠️ Warning ${maxWarn}/${maxWarn}
+
+🚫 @${sender.split("@")[0]}
+melewati batas warning
+
+Member akan dikeluarkan`,
+      mentions: [senderJid]
+    })
+
+    // DELAY
+    await new Promise(resolve =>
+      setTimeout(resolve, 1500)
+    )
+
+    // KICK
+    await sock.groupParticipantsUpdate(
+      from,
+      [senderJid],
+      "remove"
+    )
 
     return
   }
@@ -821,18 +818,16 @@ Member akan dikeluarkan`,
   // BELUM LIMIT
   // =========================
   const left =
-    maxWarn - totalWarn
+    maxWarn - currentWarn
 
   return sock.sendMessage(from, {
     text:
-`⚠️ Warning ${totalWarn}/${maxWarn}
+`⚠️ Warning ${currentWarn}/${maxWarn}
 
 Jangan kirim link lagi
 
 Sisa warning: ${left}`,
-    mentions: [
-      `${sender}@s.whatsapp.net`
-    ]
+    mentions: [senderJid]
   })
 }
       // =========================
