@@ -289,7 +289,7 @@ Silahkan chat bot saja.`
       // SENDER
       // =========================
       
-  const sender =
+const sender =
   (msg.key.participant || from)
     .replace(/:\d+/g, "")
       
@@ -356,19 +356,23 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // normalisasi id
+  // NORMALIZE ID
   const normalize = (id = "") => {
+
     return id
       .replace(/:\d+/g, "")
       .replace("@s.whatsapp.net", "")
       .replace("@lid", "")
+      .trim()
   }
 
+  // sender id
   const senderId =
     normalize(
       msg.key.participant || from
     )
 
+  // bot id
   const botId =
     normalize(sock.user.id)
 
@@ -376,22 +380,21 @@ if (isGroup) {
   const member =
     meta.participants.find(x => {
 
-      const id =
-        normalize(x.id)
-
-      return id === senderId
+      return (
+        normalize(x.id) === senderId
+      )
     })
 
   // cari bot
   const bot =
     meta.participants.find(x => {
 
-      const id =
-        normalize(x.id)
-
-      return id === botId
+      return (
+        normalize(x.id) === botId
+      )
     })
 
+  // admin check
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
