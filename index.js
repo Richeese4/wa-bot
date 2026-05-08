@@ -359,7 +359,7 @@ async function startBot() {
       }
 
 // =========================
-// ADMIN CHECK SUPER FIX
+// ADMIN CHECK FIX FINAL
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -369,17 +369,27 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // NOMOR SENDER
+  // =========================
+  // SENDER
+  // =========================
   const senderNumber =
     normalize(
       msg.key.participant || sender
     )
 
-  // NOMOR BOT
+  // =========================
+  // BOT NUMBER
+  // =========================
   const botNumber =
-    normalize(sock.user.id)
+    normalize(
+      sock.user?.id ||
+      sock.authState?.creds?.me?.id ||
+      ""
+    )
 
-  // CEK MEMBER
+  // =========================
+  // MEMBER
+  // =========================
   const member =
     meta.participants.find(x => {
 
@@ -388,34 +398,36 @@ if (isGroup) {
       )
     })
 
-  // CEK BOT ADMIN
+  // =========================
+  // BOT
+  // =========================
   const bot =
     meta.participants.find(x => {
 
-      const id =
-        normalize(x.id)
-
       return (
-        id.includes(botNumber) ||
-        botNumber.includes(id)
+        normalize(x.id) === botNumber
       )
     })
 
-  // USER ADMIN
+  // =========================
+  // ADMIN CHECK
+  // =========================
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
 
-  // BOT ADMIN
   botAdmin =
     bot?.admin === "admin" ||
     bot?.admin === "superadmin"
 
+  // =========================
+  // DEBUG
+  // =========================
   console.log("===== ADMIN CHECK =====")
   console.log("Sender :", senderNumber)
   console.log("Bot Number :", botNumber)
-  console.log("Member :", member)
-  console.log("Bot :", bot)
+  console.log("Member Admin :", member?.admin)
+  console.log("Bot Admin :", bot?.admin)
   console.log("isAdmin :", isAdmin)
   console.log("botAdmin :", botAdmin)
 }
