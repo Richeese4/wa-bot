@@ -680,6 +680,7 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       const userLimit = [
         ".menu",
+        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
@@ -912,7 +913,7 @@ wa.me/${OWNER_NUMBER}`
 
 👮 GROUP
 .antilink on/off
-.autokick <jumlah>
+.autokick <jumlah warning>
 .filterchat add <kata>
 .filterchat del <kata>
 .kick
@@ -929,7 +930,11 @@ wa.me/${OWNER_NUMBER}`
           text:
 `📌 USER MENU
 
+👮 GROUP
 .linkgroup
+.antilink on/off
+
+📌 OTHER
 .sticker
 .masaaktif
 .owner`
