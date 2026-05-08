@@ -122,8 +122,9 @@ function normalize(id = "") {
 
   return id
     .replace(/:\d+/g, "")
-    .replace("@s.whatsapp.net", "")
-    .replace("@lid", "")
+    .replace(/@s\.whatsapp\.net/g, "")
+    .replace(/@lid/g, "")
+    .replace(/[^0-9]/g, "")
     .trim()
 }
 
@@ -358,7 +359,7 @@ async function startBot() {
       }
 
 // =========================
-// ADMIN CHECK FIX FINAL
+// ADMIN CHECK SUPER FIX
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -369,13 +370,13 @@ if (isGroup) {
     await sock.groupMetadata(from)
 
   // NOMOR SENDER
-  const senderId =
+  const senderNumber =
     normalize(
       msg.key.participant || sender
     )
 
   // NOMOR BOT
-  const botId =
+  const botNumber =
     normalize(sock.user.id)
 
   // CEK MEMBER
@@ -383,34 +384,38 @@ if (isGroup) {
     meta.participants.find(x => {
 
       return (
-        normalize(x.id) === senderId
+        normalize(x.id) === senderNumber
       )
     })
 
-  // CEK BOT
+  // CEK BOT ADMIN
   const bot =
     meta.participants.find(x => {
 
+      const id =
+        normalize(x.id)
+
       return (
-        normalize(x.id) === botId
+        id.includes(botNumber) ||
+        botNumber.includes(id)
       )
     })
 
-  // ADMIN USER
+  // USER ADMIN
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
 
-  // ADMIN BOT
+  // BOT ADMIN
   botAdmin =
     bot?.admin === "admin" ||
     bot?.admin === "superadmin"
 
   console.log("===== ADMIN CHECK =====")
-  console.log("Sender :", senderId)
-  console.log("Bot ID :", botId)
-  console.log("Member :", member?.id)
-  console.log("Bot :", bot?.id)
+  console.log("Sender :", senderNumber)
+  console.log("Bot Number :", botNumber)
+  console.log("Member :", member)
+  console.log("Bot :", bot)
   console.log("isAdmin :", isAdmin)
   console.log("botAdmin :", botAdmin)
 }
