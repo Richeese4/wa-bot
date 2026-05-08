@@ -288,11 +288,11 @@ Silahkan chat bot saja.`
       // =========================
       // SENDER
       // =========================
-      const sender =
-        (msg.key.participant || from)
-          .replace(/:\d+/g, "")
-          .replace("@s.whatsapp.net", "")
-
+      
+  const sender =
+  (msg.key.participant || from)
+    .replace(/:\d+/g, "")
+      
       // =========================
       // TEXT
       // =========================
@@ -345,23 +345,70 @@ Silahkan chat bot saja.`
           })
       }
 
-      // =========================
-      // ADMIN CHECK
-      // =========================
-      let isAdmin = false
-      let botAdmin = false
+// =========================
+// ADMIN CHECK
+// =========================
+let isAdmin = false
+let botAdmin = false
 
-      if (isGroup) {
+if (isGroup) {
 
-        const meta =
-          await sock.groupMetadata(from)
+  const meta =
+    await sock.groupMetadata(from)
 
-        // normalize bot id
-        const botId =
-          sock.user.id
-            .replace(/:\d+/g, "")
-            .replace("@s.whatsapp.net", "")
+  // normalisasi id
+  const normalize = (id = "") => {
+    return id
+      .replace(/:\d+/g, "")
+      .replace("@s.whatsapp.net", "")
+      .replace("@lid", "")
+  }
 
+  const senderId =
+    normalize(
+      msg.key.participant || from
+    )
+
+  const botId =
+    normalize(sock.user.id)
+
+  // cari member
+  const member =
+    meta.participants.find(x => {
+
+      const id =
+        normalize(x.id)
+
+      return id === senderId
+    })
+
+  // cari bot
+  const bot =
+    meta.participants.find(x => {
+
+      const id =
+        normalize(x.id)
+
+      return id === botId
+    })
+
+  isAdmin =
+    member?.admin === "admin" ||
+    member?.admin === "superadmin"
+
+  botAdmin =
+    bot?.admin === "admin" ||
+    bot?.admin === "superadmin"
+
+  console.log({
+    sender: senderId,
+    bot: botId,
+    memberFound: !!member,
+    botFound: !!bot,
+    isAdmin,
+    botAdmin
+  })
+}
         // =========================
         // MEMBER
         // =========================
