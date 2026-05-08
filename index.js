@@ -368,13 +368,13 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // NORMALIZE SENDER
+  // NOMOR SENDER
   const senderId =
     normalize(
       msg.key.participant || sender
     )
 
-  // NORMALIZE BOT ID
+  // NOMOR BOT
   const botId =
     normalize(sock.user.id)
 
@@ -396,17 +396,16 @@ if (isGroup) {
       )
     })
 
-  // USER ADMIN
+  // ADMIN USER
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
 
-  // BOT ADMIN
+  // ADMIN BOT
   botAdmin =
     bot?.admin === "admin" ||
     bot?.admin === "superadmin"
 
-  // DEBUG
   console.log("===== ADMIN CHECK =====")
   console.log("Sender :", senderId)
   console.log("Bot ID :", botId)
