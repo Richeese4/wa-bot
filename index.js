@@ -617,8 +617,8 @@ Silahkan login:
           text:
 `✅ LOGIN SUCCESS
 
-👮 Admin:
-@${sender}
+📞 Contact Owner:
+wa.me/${OWNER_NUMBER}
 
 📅 Expired:
 ${format(data.expired)}`,
@@ -1380,34 +1380,303 @@ ${format(session.expired)}`
         })
       }
 
-      // =========================
-      // PANEL
-      // =========================
-      if (command === ".panel") {
+// =========================
+// PANEL
+// =========================
+if (command === ".panel") {
 
-        if (currentRole !== "owner")
-          return
+  // BUKAN OWNER
+  if (currentRole !== "owner") {
 
-        const all =
-          await User.find()
+    return sock.sendMessage(from, {
+      text:
+`❌ Perintah ini khusus owner bot`
+    })
+  }
 
-        let txt =
-          "📌 ACTIVE KEYS\n\n"
+  const all =
+    await User.find()
 
-        all.forEach((x, i) => {
+  let txt =
+    "📌 ACTIVE KEYS\n\n"
 
-          txt +=
+  if (all.length < 1) {
+
+    txt += "Tidak ada key aktif"
+
+  } else {
+
+    all.forEach((x, i) => {
+
+      txt +=
 `${i + 1}. ${x.key}
 Role: ${x.role}
 Expired: ${format(x.expired)}
 
 `
-        })
+    })
+  }
 
-        return sock.sendMessage(from, {
-          text: txt
-        })
-      }
+  return sock.sendMessage(from, {
+    text: txt
+  })
+}
+
+// =========================
+// ADDTIME
+// =========================
+if (command === ".addtime") {
+
+  if (currentRole !== "owner") {
+
+    return sock.sendMessage(from, {
+      text: "❌ Khusus owner"
+    })
+  }
+
+  const key =
+    cmd.split(" ")[1]
+
+  const hari =
+    parseInt(cmd.split(" ")[2])
+
+  if (!key || !hari) {
+
+    return sock.sendMessage(from, {
+      text:
+`.addtime KEY-XXXX 30`
+    })
+  }
+
+  const user =
+    await User.findOne({
+      key: key.toUpperCase()
+    })
+
+  if (!user) {
+
+    return sock.sendMessage(from, {
+      text: "❌ Key tidak ditemukan"
+    })
+  }
+
+  // TAMBAH MASA AKTIF
+  user.expired +=
+    hari * 86400000
+
+  await user.save()
+
+  // UPDATE SESSION
+  await Session.updateMany(
+    {
+      key: user.key
+    },
+    {
+      expired: user.expired
+    }
+  )
+
+  // NOTIF KE GROUP USER
+  const sessions =
+    await Session.find({
+      key: user.key
+    })
+
+  for (const s of sessions) {
+
+    await sock.sendMessage(s.group, {
+      text:
+`✅ MASA AKTIF DITAMBAHKAN
+
+🔑 Key:
+${user.key}
+
+⏳ Tambahan:
+${hari} Hari
+
+📅 Expired Baru:
+${format(user.expired)}
+
+📞 Owner:
+wa.me/${OWNER_NUMBER}`
+    })
+  }
+
+  return sock.sendMessage(from, {
+    text:
+`✅ Berhasil tambah masa aktif
+
+🔑 ${user.key}
+
+📅 Expired Baru:
+${format(user.expired)}`
+  })
+}
+
+// =========================
+// DELTIME
+// =========================
+if (command === ".deltime") {
+
+  if (currentRole !== "owner") {
+
+    return sock.sendMessage(from, {
+      text: "❌ Khusus owner"
+    })
+  }
+
+  const key =
+    cmd.split(" ")[1]
+
+  const hari =
+    parseInt(cmd.split(" ")[2])
+
+  if (!key || !hari) {
+
+    return sock.sendMessage(from, {
+      text:
+`.deltime KEY-XXXX 7`
+    })
+  }
+
+  const user =
+    await User.findOne({
+      key: key.toUpperCase()
+    })
+
+  if (!user) {
+
+    return sock.sendMessage(from, {
+      text: "❌ Key tidak ditemukan"
+    })
+  }
+
+  // KURANGI MASA AKTIF
+  user.expired -=
+    hari * 86400000
+
+  await user.save()
+
+  // UPDATE SESSION
+  await Session.updateMany(
+    {
+      key: user.key
+    },
+    {
+      expired: user.expired
+    }
+  )
+
+  // NOTIF USER
+  const sessions =
+    await Session.find({
+      key: user.key
+    })
+
+  for (const s of sessions) {
+
+    await sock.sendMessage(s.group, {
+      text:
+`⚠️ MASA AKTIF DIKURANGI
+
+🔑 Key:
+${user.key}
+
+⏳ Dikurangi:
+${hari} Hari
+
+📅 Expired Baru:
+${format(user.expired)}
+
+📞 Owner:
+wa.me/${OWNER_NUMBER}`
+    })
+  }
+
+  return sock.sendMessage(from, {
+    text:
+`✅ Berhasil kurangi masa aktif
+
+📅 Expired Baru:
+${format(user.expired)}`
+  })
+}
+
+// =========================
+// DELKEY
+// =========================
+if (command === ".delkey") {
+
+  if (currentRole !== "owner") {
+
+    return sock.sendMessage(from, {
+      text: "❌ Khusus owner"
+    })
+  }
+
+  const key =
+    cmd.split(" ")[1]
+
+  if (!key) {
+
+    return sock.sendMessage(from, {
+      text:
+`.delkey KEY-XXXX`
+    })
+  }
+
+  const user =
+    await User.findOne({
+      key: key.toUpperCase()
+    })
+
+  if (!user) {
+
+    return sock.sendMessage(from, {
+      text: "❌ Key tidak ditemukan"
+    })
+  }
+
+  // CARI SESSION
+  const sessions =
+    await Session.find({
+      key: user.key
+    })
+
+  // NOTIF USER
+  for (const s of sessions) {
+
+    await sock.sendMessage(s.group, {
+      text:
+`❌ KEY DIHAPUS OWNER
+
+🔑 Key:
+${user.key}
+
+Bot sudah tidak aktif
+
+📞 Hubungi owner:
+wa.me/${OWNER_NUMBER}`
+    })
+  }
+
+  // HAPUS SESSION
+  await Session.deleteMany({
+    key: user.key
+  })
+
+  // HAPUS USER
+  await User.deleteOne({
+    key: user.key
+  })
+
+  return sock.sendMessage(from, {
+    text:
+`✅ Key berhasil dihapus
+
+🔑 ${user.key}`
+  })
+}
 
     } catch (e) {
 
