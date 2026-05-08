@@ -217,6 +217,8 @@ async function startBot() {
 
       const from = msg.key.remoteJid
 
+      if (!from) return
+
       const sender =
         (msg.key.participant || from)
         .split(":")[0]
@@ -263,40 +265,41 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // normalize sender
+  // nomor sender asli
   const senderId =
     sender.split("@")[0]
 
-  // normalize bot
+  // nomor bot asli
   const botId =
-    sock.user.id
-      .split(":")[0]
-      .split("@")[0]
+    sock.user.id.split(":")[0]
 
-  // cek sender
+  // cari member
   const member =
     meta.participants.find(x => {
 
       const id =
-        x.id
-          .split(":")[0]
-          .split("@")[0]
+        x.id.split(":")[0]
 
-      return id === senderId
+      return (
+        id === senderId ||
+        x.id.includes(senderId)
+      )
     })
 
-  // cek bot
+  // cari bot
   const bot =
     meta.participants.find(x => {
 
       const id =
-        x.id
-          .split(":")[0]
-          .split("@")[0]
+        x.id.split(":")[0]
 
-      return id === botId
+      return (
+        id === botId ||
+        x.id.includes(botId)
+      )
     })
 
+  // cek admin
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
