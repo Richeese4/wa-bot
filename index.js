@@ -357,55 +357,64 @@ async function startBot() {
           })
       }
 
-      // =========================
-      // ADMIN CHECK FIX
-      // =========================
-      let isAdmin = false
-      let botAdmin = false
+// =========================
+// ADMIN CHECK FIX FINAL
+// =========================
+let isAdmin = false
+let botAdmin = false
 
-      if (isGroup) {
+if (isGroup) {
 
-        const meta =
-          await sock.groupMetadata(from)
+  const meta =
+    await sock.groupMetadata(from)
 
-        const senderId =
-          normalize(sender)
+  // NORMALIZE SENDER
+  const senderId =
+    normalize(
+      msg.key.participant || sender
+    )
 
-        const botId =
-          normalize(sock.user.id)
+  // NORMALIZE BOT ID
+  const botId =
+    normalize(sock.user.id)
 
-        const member =
-          meta.participants.find(x => {
+  // CEK MEMBER
+  const member =
+    meta.participants.find(x => {
 
-            return (
-              normalize(x.id) === senderId
-            )
-          })
+      return (
+        normalize(x.id) === senderId
+      )
+    })
 
-        const bot =
-          meta.participants.find(x => {
+  // CEK BOT
+  const bot =
+    meta.participants.find(x => {
 
-            return (
-              normalize(x.id) === botId
-            )
-          })
+      return (
+        normalize(x.id) === botId
+      )
+    })
 
-        isAdmin =
-          member?.admin === "admin" ||
-          member?.admin === "superadmin"
+  // USER ADMIN
+  isAdmin =
+    member?.admin === "admin" ||
+    member?.admin === "superadmin"
 
-        botAdmin =
-          bot?.admin === "admin" ||
-          bot?.admin === "superadmin"
+  // BOT ADMIN
+  botAdmin =
+    bot?.admin === "admin" ||
+    bot?.admin === "superadmin"
 
-        console.log({
-          sender: senderId,
-          bot: botId,
-          isAdmin,
-          botAdmin
-        })
-      }
-
+  // DEBUG
+  console.log("===== ADMIN CHECK =====")
+  console.log("Sender :", senderId)
+  console.log("Bot ID :", botId)
+  console.log("Member :", member?.id)
+  console.log("Bot :", bot?.id)
+  console.log("isAdmin :", isAdmin)
+  console.log("botAdmin :", botAdmin)
+}
       // =========================
       // BLOCK BELUM LOGIN
       // =========================
@@ -618,97 +627,97 @@ ${format(data.expired)}`,
         }
       }
 
-      // =========================
-      // ANTILINK FIX
-      // =========================
-      if (
-        settings.antilink &&
-        isGroup &&
-        isLink(text)
-      ) {
+// =========================
+// ANTILINK FIX FINAL
+// =========================
+if (
+  settings.antilink &&
+  isGroup &&
+  isLink(text)
+) {
 
-        if (
-          isAdmin ||
-          sender.includes(OWNER_NUMBER)
-        ) return
+  // ADMIN & OWNER BYPASS
+  if (
+    isAdmin ||
+    sender.includes(OWNER_NUMBER)
+  ) return
 
-        // BOT HARUS ADMIN
-        if (!botAdmin) {
+  // BOT HARUS ADMIN
+  if (!botAdmin) {
 
-          console.log(
-            "BOT BUKAN ADMIN"
-          )
+    console.log(
+      "BOT TIDAK PUNYA AKSES ADMIN"
+    )
 
-          return
-        }
+    return
+  }
 
-        const warns =
-          settings.warns || {}
+  const warns =
+    settings.warns || {}
 
-        if (!warns[sender]) {
-          warns[sender] = 0
-        }
+  if (!warns[sender]) {
+    warns[sender] = 0
+  }
 
-        warns[sender] += 1
+  warns[sender] += 1
 
-        settings.warns = warns
+  settings.warns = warns
 
-        await settings.save()
+  await settings.save()
 
-        const left =
-          settings.maxwarn -
-          warns[sender]
+  const left =
+    settings.maxwarn -
+    warns[sender]
 
-        // DELETE PESAN
-        await sock.sendMessage(from, {
-          delete: msg.key
-        })
+  // HAPUS CHAT LINK
+  await sock.sendMessage(from, {
+    delete: msg.key
+  })
 
-        // AUTO KICK
-        if (
-          warns[sender] >=
-          settings.maxwarn
-        ) {
+  // AUTOKICK
+  if (
+    warns[sender] >=
+    settings.maxwarn
+  ) {
 
-          await sock.sendMessage(from, {
-            text:
-`🚫 @${sender.split("@")[0]}
+    await sock.sendMessage(from, {
+      text:
+`🚫 @${sender}
 dikeluarkan karena spam link`,
-            mentions: [
-              `${sender}@s.whatsapp.net`
-            ]
-          })
+      mentions: [
+        `${sender}@s.whatsapp.net`
+      ]
+    })
 
-          await sock.groupParticipantsUpdate(
-            from,
-            [
-              `${sender}@s.whatsapp.net`
-            ],
-            "remove"
-          )
+    await sock.groupParticipantsUpdate(
+      from,
+      [
+        `${sender}@s.whatsapp.net`
+      ],
+      "remove"
+    )
 
-          delete warns[sender]
+    delete warns[sender]
 
-          settings.warns = warns
+    settings.warns = warns
 
-          await settings.save()
+    await settings.save()
 
-          return
-        }
+    return
+  }
 
-        return sock.sendMessage(from, {
-          text:
+  return sock.sendMessage(from, {
+    text:
 `⚠️ Warning ${warns[sender]}/${settings.maxwarn}
 
 Jangan kirim link lagi
 
 Sisa warning: ${left}`,
-          mentions: [
-            `${sender}@s.whatsapp.net`
-          ]
-        })
-      }
-
+    mentions: [
+      `${sender}@s.whatsapp.net`
+    ]
+  })
+}
       // =========================
       // MENU
       // =========================
