@@ -252,44 +252,68 @@ async function startBot() {
           })
       }
 
-      // =========================
-      // ADMIN CHECK
-      // =========================
-      let isAdmin = false
-      let botAdmin = false
+// =========================
+// ADMIN CHECK
+// =========================
+let isAdmin = false
+let botAdmin = false
 
-      if (isGroup) {
+if (isGroup) {
 
-        const meta =
-          await sock.groupMetadata(from)
+  const meta =
+    await sock.groupMetadata(from)
 
-        const member =
-          meta.participants.find(
-            x => x.id === sender
-          )
+  // normalize sender
+  const senderId =
+    sender.split("@")[0]
 
-        const bot =
-          meta.participants.find(
-            x => x.id.includes(
-              sock.user.id.split(":")[0]
-            )
-          )
+  // normalize bot
+  const botId =
+    sock.user.id
+      .split(":")[0]
+      .split("@")[0]
 
-        isAdmin =
-          !!member?.admin
+  // cek sender
+  const member =
+    meta.participants.find(x => {
 
-        botAdmin =
-          !!bot?.admin
-      }
+      const id =
+        x.id
+          .split(":")[0]
+          .split("@")[0]
 
-      // =========================
-      // SESSION
-      // =========================
-      let session = isGroup
-        ? await Session.findOne({
-            group: from
-          })
-        : null
+      return id === senderId
+    })
+
+  // cek bot
+  const bot =
+    meta.participants.find(x => {
+
+      const id =
+        x.id
+          .split(":")[0]
+          .split("@")[0]
+
+      return id === botId
+    })
+
+  isAdmin =
+    member?.admin === "admin" ||
+    member?.admin === "superadmin"
+
+  botAdmin =
+    bot?.admin === "admin" ||
+    bot?.admin === "superadmin"
+
+  console.log({
+    sender: senderId,
+    bot: botId,
+    memberFound: !!member,
+    botFound: !!bot,
+    isAdmin,
+    botAdmin
+  })
+}
 
       // =========================
       // BLOCK BELUM LOGIN
