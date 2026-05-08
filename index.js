@@ -359,7 +359,7 @@ async function startBot() {
       }
 
 // =========================
-// ADMIN CHECK FIX FINAL
+// ADMIN CHECK FINAL
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -375,16 +375,6 @@ if (isGroup) {
   const senderNumber =
     normalize(
       msg.key.participant || sender
-    )
-
-  // =========================
-  // BOT NUMBER
-  // =========================
-  const botNumber =
-    normalize(
-      sock.user?.id ||
-      sock.authState?.creds?.me?.id ||
-      ""
     )
 
   // =========================
@@ -405,7 +395,7 @@ if (isGroup) {
     meta.participants.find(x => {
 
       return (
-        normalize(x.id) === botNumber
+        x.id === sock.user.id
       )
     })
 
@@ -425,10 +415,8 @@ if (isGroup) {
   // =========================
   console.log("===== ADMIN CHECK =====")
   console.log("Sender :", senderNumber)
-  console.log("Bot Number :", botNumber)
-  console.log("Member Admin :", member?.admin)
+  console.log("Bot ID :", sock.user.id)
   console.log("Bot Admin :", bot?.admin)
-  console.log("isAdmin :", isAdmin)
   console.log("botAdmin :", botAdmin)
 }
       // =========================
