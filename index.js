@@ -412,54 +412,6 @@ if (isGroup) {
     botAdmin
   })
 }
-        // =========================
-        // MEMBER
-        // =========================
-        const member =
-          meta.participants.find(x => {
-
-            const id =
-              x.id
-                .replace(/:\d+/g, "")
-                .replace("@s.whatsapp.net", "")
-
-            return id === sender
-          })
-
-        // =========================
-        // BOT
-        // =========================
-        const bot =
-          meta.participants.find(x => {
-
-            const id =
-              x.id
-                .replace(/:\d+/g, "")
-                .replace("@s.whatsapp.net", "")
-
-            return id === botId
-          })
-
-        // =========================
-        // CHECK ADMIN
-        // =========================
-        isAdmin =
-          member?.admin === "admin" ||
-          member?.admin === "superadmin"
-
-        botAdmin =
-          bot?.admin === "admin" ||
-          bot?.admin === "superadmin"
-
-        console.log({
-          sender,
-          bot: botId,
-          memberFound: !!member,
-          botFound: !!bot,
-          isAdmin,
-          botAdmin
-        })
-      }
 
       // =========================
       // BLOCK BELUM LOGIN
