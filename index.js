@@ -358,7 +358,7 @@ async function startBot() {
           })
       }
 // =========================
-// ADMIN CHECK FINAL LID FIX
+// ADMIN CHECK ULTRA FIX
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -369,96 +369,129 @@ if (isGroup) {
     await sock.groupMetadata(from)
 
   // =========================
-  // SENDER NUMBER
+  // SEMUA ID USER
   // =========================
-  const senderNumber =
-    normalize(
-      msg.key.participant || sender
+  const senderIds = []
+
+  if (msg.key.participant) {
+    senderIds.push(
+      normalize(msg.key.participant)
     )
-
-  // =========================
-  // MEMBER DATA
-  // =========================
-  const member =
-    meta.participants.find(x => {
-
-      return (
-        normalize(x.id) === senderNumber
-      )
-    })
-
-  // =========================
-  // BOT DATA
-  // =========================
-  let bot =
-    meta.participants.find(x => {
-
-      // cocokkan langsung full id
-      return (
-        x.id === sock.user.id
-      )
-    })
-
-  // =========================
-  // FALLBACK LID
-  // =========================
-  if (!bot && sock.user.lid) {
-
-    bot =
-      meta.participants.find(x => {
-
-        return (
-          x.id === sock.user.lid
-        )
-      })
   }
 
-  // =========================
-  // FALLBACK NORMALIZE
-  // =========================
-  if (!bot) {
+  senderIds.push(
+    normalize(sender)
+  )
 
-    const botNumber =
+  // =========================
+  // SEMUA ID BOT
+  // =========================
+  const botIds = []
+
+  // ID UTAMA
+  if (sock.user?.id) {
+
+    botIds.push(
       normalize(sock.user.id)
+    )
+  }
 
-    bot =
-      meta.participants.find(x => {
+  // LID BARU
+  if (sock.user?.lid) {
 
-        return (
-          normalize(x.id) === botNumber
-        )
-      })
+    botIds.push(
+      normalize(sock.user.lid)
+    )
+  }
+
+  // TAMBAHAN JAGA2
+  if (sock.user?.jid) {
+
+    botIds.push(
+      normalize(sock.user.jid)
+    )
   }
 
   // =========================
-  // CHECK ADMIN
+  // DEBUG FULL
   // =========================
-  isAdmin = !!member?.admin
-  botAdmin = !!bot?.admin
-
-  // =========================
-  // DEBUG
-  // =========================
-  console.log("===== ADMIN CHECK =====")
+  console.log("===== BOT DEBUG =====")
 
   console.log(
     "sock.user.id:",
-    sock.user.id
+    sock.user?.id
   )
 
   console.log(
     "sock.user.lid:",
-    sock.user.lid
+    sock.user?.lid
   )
 
   console.log(
-    "BOT DATA:",
+    "BOT IDS:",
+    botIds
+  )
+
+  console.log(
+    "GROUP PARTICIPANTS:"
+  )
+
+  meta.participants.forEach((x) => {
+
+    console.log({
+      id: x.id,
+      admin: x.admin,
+      normalized: normalize(x.id)
+    })
+  })
+
+  // =========================
+  // MEMBER
+  // =========================
+  const member =
+    meta.participants.find(x => {
+
+      return senderIds.includes(
+        normalize(x.id)
+      )
+    })
+
+  // =========================
+  // BOT
+  // =========================
+  const bot =
+    meta.participants.find(x => {
+
+      const pid =
+        normalize(x.id)
+
+      return botIds.includes(pid)
+    })
+
+  // =========================
+  // CHECK ADMIN
+  // =========================
+  isAdmin =
+    member?.admin === "admin" ||
+    member?.admin === "superadmin"
+
+  botAdmin =
+    bot?.admin === "admin" ||
+    bot?.admin === "superadmin"
+
+  // =========================
+  // DEBUG FINAL
+  // =========================
+  console.log("===== FINAL CHECK =====")
+
+  console.log(
+    "MEMBER:",
+    member
+  )
+
+  console.log(
+    "BOT:",
     bot
-  )
-
-  console.log(
-    "BOT ADMIN:",
-    bot?.admin
   )
 
   console.log(
