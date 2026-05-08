@@ -359,7 +359,7 @@ async function startBot() {
       }
 
 // =========================
-// ADMIN CHECK FINAL
+// ADMIN CHECK SUPER FIX
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -370,7 +370,7 @@ if (isGroup) {
     await sock.groupMetadata(from)
 
   // =========================
-  // SENDER
+  // SENDER NUMBER
   // =========================
   const senderNumber =
     normalize(
@@ -378,7 +378,13 @@ if (isGroup) {
     )
 
   // =========================
-  // MEMBER
+  // BOT NUMBER
+  // =========================
+  const botNumber =
+    normalize(sock.user.id)
+
+  // =========================
+  // MEMBER DATA
   // =========================
   const member =
     meta.participants.find(x => {
@@ -389,18 +395,18 @@ if (isGroup) {
     })
 
   // =========================
-  // BOT
+  // BOT DATA
   // =========================
   const bot =
     meta.participants.find(x => {
 
       return (
-        x.id === sock.user.id
+        normalize(x.id) === botNumber
       )
     })
 
   // =========================
-  // ADMIN CHECK
+  // CHECK ADMIN
   // =========================
   isAdmin =
     member?.admin === "admin" ||
@@ -415,8 +421,10 @@ if (isGroup) {
   // =========================
   console.log("===== ADMIN CHECK =====")
   console.log("Sender :", senderNumber)
-  console.log("Bot ID :", sock.user.id)
+  console.log("Bot Number :", botNumber)
+  console.log("Member Admin :", member?.admin)
   console.log("Bot Admin :", bot?.admin)
+  console.log("isAdmin :", isAdmin)
   console.log("botAdmin :", botAdmin)
 }
       // =========================
