@@ -773,7 +773,12 @@ if (
   ) return
 
   // BOT HARUS ADMIN
-  if (!botAdmin) return
+if (!botAdmin) {
+  return sock.sendMessage(from,{
+    text:
+"❌ Bot harus dijadikan admin terlebih dahulu agar fitur bekerja"
+  })
+}
 
   // JID ASLI
   const senderJid =
@@ -846,6 +851,16 @@ Member akan dikeluarkan`,
     )
 
     // KICK
+    const isBotAdmin =
+  await requireBotAdmin(sock, from)
+
+if (!isBotAdmin) {
+  return sock.sendMessage(from, {
+    text:
+"❌ Bot harus dijadikan admin terlebih dahulu"
+  })
+}
+    
     await sock.groupParticipantsUpdate(
       from,
       [senderJid],
@@ -1075,12 +1090,19 @@ wa.me/${OWNER_NUMBER}`
           currentRole !== "owner"
         ) return
 
-        if (!isAdmin) {
+const isBotAdmin =
+  await requireBotAdmin(sock, from)
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
+if (!isBotAdmin) {
+  return sock.sendMessage(from,{
+    text:
+"❌ Bot harus dijadikan admin terlebih dahulu"
+  })
+}
+
+await sock.sendMessage(from,{
+  delete: msg.key
+})
         }
 
         const jumlah =
@@ -1121,12 +1143,16 @@ ${jumlah} warning`
           currentRole !== "owner"
         ) return
 
-        if (!isAdmin) {
+if (!botAdmin) {
+  return sock.sendMessage(from,{
+    text:
+"❌ Bot harus dijadikan admin terlebih dahulu agar bekerja"
+  })
+}
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
+await sock.sendMessage(from,{
+  delete: msg.key
+})
         }
 
         const action =
@@ -1271,16 +1297,26 @@ ${word}`
       // =========================
       // LINK GROUP
       // =========================
-      if (command === ".linkgroup") {
+if (command === ".linkgroup") {
 
-        const code =
-          await sock.groupInviteCode(from)
+  const isBotAdmin =
+    await requireBotAdmin(sock, from)
 
-        return sock.sendMessage(from, {
-          text:
-            "https://chat.whatsapp.com/" + code
-        })
-      }
+  if (!isBotAdmin) {
+    return sock.sendMessage(from, {
+      text:
+"❌ Bot harus dijadikan admin terlebih dahulu"
+    })
+  }
+
+  const code =
+    await sock.groupInviteCode(from)
+
+  return sock.sendMessage(from, {
+    text:
+"https://chat.whatsapp.com/" + code
+  })
+}
 
       // =========================
       // STICKER
