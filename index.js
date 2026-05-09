@@ -1353,26 +1353,43 @@ if (command === ".kick") {
   })
 }
 
-      // =========================
-      // LINK GROUP
-      // =========================
-      if (command === ".linkgroup") {
+// =========================
+// LINK GROUP
+// =========================
+if (command === ".linkgroup") {
 
-        const code =
- if (!botAdmin) {
-  return sock.sendMessage(from,{
-    text:"❌ Bot harus admin"
-  })
+  if (!isGroup) {
+    return sock.sendMessage(from, {
+      text: "❌ Hanya bisa dipakai di group"
+    })
+  }
+
+  if (!botAdmin) {
+    return sock.sendMessage(from, {
+      text: "❌ Bot harus admin"
+    })
+  }
+
+  try {
+
+    const code =
+      await sock.groupInviteCode(from)
+
+    return sock.sendMessage(from, {
+      text:
+        "https://chat.whatsapp.com/" + code
+    })
+
+  } catch (e) {
+
+    console.log("LINKGROUP ERROR:", e.message)
+
+    return sock.sendMessage(from, {
+      text: "❌ Gagal mengambil link group"
+    })
+  }
 }
-
-const code =
-  await sock.groupInviteCode(from)
-        return sock.sendMessage(from, {
-          text:
-            "https://chat.whatsapp.com/" + code
-        })
-      }
-
+      
 // =========================
 // STICKER FIX
 // kirim/reply gambar + .sticker
