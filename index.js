@@ -151,6 +151,7 @@ function normalize(id = "") {
 // =========================
 // START BOT
 // =========================
+const autoPost = {}
 async function startBot() {
 
   const { state, saveCreds } =
@@ -303,7 +304,8 @@ async function startBot() {
 
     try {
 
-      const msg = messages[0]
+      const msg = messages?.[0]
+if (!msg) return
 
    if (msg.key.id.startsWith("BAE5")) return
 
@@ -341,12 +343,23 @@ if (
       // =========================
       // TEXT
       // =========================
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        msg.message.videoMessage?.caption ||
-        ""
+const m = msg?.message || {}
+
+const text =
+  m.conversation ||
+  m.extendedTextMessage?.text ||
+  m.imageMessage?.caption ||
+  m.videoMessage?.caption ||
+  m.documentMessage?.caption ||
+  m.buttonsResponseMessage?.selectedButtonId ||
+  m.listResponseMessage?.singleSelectReply?.selectedRowId ||
+  m.templateButtonReplyMessage?.selectedId ||
+  m.interactiveResponseMessage?.body?.text ||
+  m.viewOnceMessage?.message?.imageMessage?.caption ||
+  m.viewOnceMessage?.message?.videoMessage?.caption ||
+  m.ephemeralMessage?.message?.conversation ||
+  m.ephemeralMessage?.message?.extendedTextMessage?.text ||
+  ""
 
       if (!text) return
 
