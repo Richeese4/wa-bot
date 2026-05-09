@@ -1,6 +1,5 @@
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
-const axios = require("axios")
 const fs = require("fs")
 const express = require("express")
 const mongoose = require("mongoose")
@@ -9,8 +8,7 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion,
-  downloadContentFromMessage
+  fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys")
 
 // =========================
@@ -73,20 +71,10 @@ const GroupSettings = mongoose.model("GroupSettings", new mongoose.Schema({
     default: []
   },
 
-warns: {
-  type: Object,
-  default: {}
-},
-
-levels: {
-  type: Object,
-  default: {}
-},
-
-autoposts: {
-  type: Array,
-  default: []
-}
+  warns: {
+    type: Object,
+    default: {}
+  }
 }))
 
 // =========================
@@ -119,44 +107,12 @@ function format(ms) {
 // =========================
 // DETECT LINK
 // =========================
-function isGroupLink(text) {
+function isLink(text) {
 
   const regex =
     /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me)/gi
 
   return regex.test(text)
-}
-
-// =========================
-// REPLY MESSAGE
-// =========================
-async function reply(sock, from, msg, text) {
-
-  return sock.sendMessage(from, {
-    text
-  }, {
-    quoted: msg
-  })
-}
-
-// =========================
-// DETECT GROUP LINK ONLY
-// =========================
-function isGroupLink(text = "") {
-
-  return text.includes(
-    "chat.whatsapp.com/"
-  )
-}
-
-// =========================
-// GET LEVEL
-// =========================
-function getLevel(xp = 0) {
-
-  return Math.floor(
-    0.1 * Math.sqrt(xp)
-  )
 }
 
 // =========================
@@ -288,24 +244,6 @@ async function startBot() {
       // MEMBER KELUAR
       if (m.action === "remove") {
 
-        const settings =
-  await GroupSettings.findOne({
-    group: m.id
-  })
-
-if (settings?.levels) {
-
-  delete settings.levels[
-    normalize(p)
-  ]
-
-  settings.markModified(
-    "levels"
-  )
-
-  await settings.save()
-}
-
         for (let p of m.participants) {
 
           if (fs.existsSync("./keluar.jpg")) {
@@ -353,17 +291,6 @@ if (settings?.levels) {
       const isGroup =
         from.endsWith("@g.us")
 
-// =========================
-// BLOCK PRIVATE CHAT
-// =========================
-if (!isGroup) {
-
-  const allowOwner =
-    sender === OWNER_NUMBER
-
-  if (!allowOwner) return
-}
-
       // =========================
       // AUTO READ
       // =========================
@@ -390,6 +317,7 @@ if (!isGroup) {
         ""
 
       if (!text) return
+
       const cmd = text.trim()
 
       const command =
@@ -401,73 +329,22 @@ if (!isGroup) {
         command
       )
 
-// =========================
-// SETTINGS
-// =========================
-let settings =
-  await GroupSettings.findOne({
-    group: from
-  })
+      // =========================
+      // SETTINGS
+      // =========================
+      let settings =
+        await GroupSettings.findOne({
+          group: from
+        })
 
-if (!settings) {
+      if (!settings) {
 
-  settings =
-    await GroupSettings.create({
-      group: from
-    })
-}
+        settings =
+          await GroupSettings.create({
+            group: from
+          })
+      }
 
-// =========================
-// XP SYSTEM
-// =========================
-if (isGroup) {
-
-  if (!settings.levels) {
-    settings.levels = {}
-  }
-
-  if (!settings.levels[sender]) {
-
-    settings.levels[sender] = {
-      xp: 0,
-      level: 0
-    }
-  }
-
-  const data =
-    settings.levels[sender]
-
-  const oldLevel =
-    data.level
-
-  data.xp += 5
-
-  const newLevel =
-    getLevel(data.xp)
-
-  data.level = newLevel
-
-  settings.markModified("levels")
-
-  await settings.save()
-
-  // LEVEL UP
-  if (newLevel > oldLevel) {
-
-    await reply(
-      sock,
-      from,
-      msg,
-`🎉 Selamat @${sender}
-
-Kamu naik ke level ${newLevel}
-
-Tingkatkan komunikasi
-untuk naik level berikutnya!`
-    )
-  }
-}
-      
       // =========================
       // SESSION
       // =========================
@@ -802,6 +679,8 @@ wa.me/${OWNER_NUMBER}`
       // USER LIMIT
       // =========================
       const userLimit = [
+        ".menu",
+        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
@@ -856,7 +735,7 @@ wa.me/${OWNER_NUMBER}`
 if (
   settings.antilink &&
   isGroup &&
-  isGroupLink(text)
+  isLink(text)
 ) {
 
   // ADMIN & OWNER BYPASS
@@ -880,32 +759,8 @@ if (
   }
 
   // WARNING SEKARANG
-if (
-  !settings.warns[sender]
-) {
-
-  settings.warns[sender] = {
-    total: 0,
-    last: Date.now()
-  }
-}
-
-const warnData =
-  settings.warns[sender]
-
-// RESET 1 HARI
-if (
-  Date.now() - warnData.last >
-  86400000
-) {
-
-  warnData.total = 0
-}
-
-warnData.last = Date.now()
-
-let currentWarn =
-  Number(warnData.total || 0)
+  let currentWarn =
+    Number(settings.warns[sender] || 0)
 
   const maxWarn =
     Number(settings.maxwarn || 3)
@@ -919,8 +774,8 @@ let currentWarn =
   }
 
   // SAVE
-warnData.total =
-  currentWarn
+  settings.warns[sender] =
+    currentWarn
 
   settings.markModified("warns")
 
@@ -992,16 +847,6 @@ Sisa warning: ${left}`,
       // MENU
       // =========================
       if (command === ".menu") {
-
-        if (!isAdmin) {
-
-  return reply(
-    sock,
-    from,
-    msg,
-    "❌ Menu hanya admin"
-  )
-}
 
       // CEK SESSION EXPIRED SAAT MENU
 if (
@@ -1395,102 +1240,30 @@ ${word}`
         })
       }
 
-// =========================
-// LINK GROUP
-// =========================
-if (command === ".linkgroup") {
+      // =========================
+      // LINK GROUP
+      // =========================
+      if (command === ".linkgroup") {
 
-  if (!isGroup) {
+        const code =
+          await sock.groupInviteCode(from)
 
-    return reply(
-      sock,
-      from,
-      msg,
-      "❌ Hanya di group"
-    )
-  }
+        return sock.sendMessage(from, {
+          text:
+            "https://chat.whatsapp.com/" + code
+        })
+      }
 
-  if (!botAdmin) {
+      // =========================
+      // STICKER
+      // =========================
+      if (command === ".sticker") {
 
-    return reply(
-      sock,
-      from,
-      msg,
-      "❌ Bot harus admin"
-    )
-  }
-
-  try {
-
-    const code =
-      await sock.groupInviteCode(from)
-
-    return reply(
-      sock,
-      from,
-      msg,
-      "https://chat.whatsapp.com/" + code
-    )
-
-  } catch {
-
-    return reply(
-      sock,
-      from,
-      msg,
-      "❌ Gagal mengambil link"
-    )
-  }
-}
-
-// =========================
-// STICKER
-// =========================
-if (command === ".sticker") {
-
-  let quoted =
-    msg.message?.extendedTextMessage
-    ?.contextInfo?.quotedMessage
-
-  let image =
-    quoted?.imageMessage ||
-    msg.message?.imageMessage
-
-  if (!image) {
-
-    return reply(
-      sock,
-      from,
-      msg,
-      "❌ Reply/kirim gambar dengan caption .sticker"
-    )
-  }
-
-  const stream =
-    await downloadContentFromMessage(
-      image,
-      "image"
-    )
-
-  let buffer =
-    Buffer.from([])
-
-  for await (const chunk of stream) {
-    buffer =
-      Buffer.concat([
-        buffer,
-        chunk
-      ])
-  }
-
-  await sock.sendMessage(from, {
-    sticker: buffer
-  }, {
-    quoted: msg
-  })
-
-  return
-}
+        return sock.sendMessage(from, {
+          text:
+            "✅ Sticker system aktif"
+        })
+      }
 
       // =========================
       // MASA AKTIF
@@ -1564,10 +1337,7 @@ ${format(session.expired)}`
       // =========================
       if (command === ".genprem") {
 
-        if (
-  currentRole !== "owner" ||
-  sender !== OWNER_NUMBER
-)
+        if (currentRole !== "owner")
           return
 
         const hari =
@@ -1620,203 +1390,41 @@ ${format(session.expired)}`
 // =========================
 if (command === ".panel") {
 
+  // BUKAN OWNER
   if (currentRole !== "owner") {
 
-    return reply(
-      sock,
-      from,
-      msg,
-      "❌ Khusus owner"
-    )
+    return sock.sendMessage(from, {
+      text:
+`❌ Perintah ini khusus owner bot`
+    })
   }
 
   const all =
     await User.find()
 
   let txt =
-`📌 PANEL KEY
+    "📌 ACTIVE KEYS\n\n"
 
-`
+  if (all.length < 1) {
 
-  for (const x of all) {
+    txt += "Tidak ada key aktif"
 
-    const session =
-      await Session.findOne({
-        key: x.key
-      })
+  } else {
 
-    let status = "🕒 BELUM DIGUNAKAN"
+    all.forEach((x, i) => {
 
-    if (
-      Date.now() > x.expired
-    ) {
-
-      status = "❌ EXPIRED"
-    }
-
-    else if (session) {
-
-      status = "✅ ACTIVE"
-    }
-
-    txt +=
-`🔑 ${x.key}
+      txt +=
+`${i + 1}. ${x.key}
 Role: ${x.role}
-
-Status:
-${status}
-
-Group:
-${session?.group || "-"}
-
-Expired:
-${format(x.expired)}
+Expired: ${format(x.expired)}
 
 `
+    })
   }
 
-  return reply(
-    sock,
-    from,
-    msg,
-    txt
-  )
-}
-
-// =========================
-// PEMBERITAHUAN
-// =========================
-if (command === ".pemberitahuan") {
-
-  if (currentRole !== "owner")
-    return
-
-  const isi =
-    cmd.split(" ")
-    .slice(1)
-    .join(" ")
-
-  if (!isi) {
-
-    return reply(
-      sock,
-      from,
-      msg,
-`.pemberitahuan pesan`
-    )
-  }
-
-  const sessions =
-    await Session.find()
-
-  for (const s of sessions) {
-
-    await sock.sendMessage(
-      s.group,
-      {
-        text:
-`📢 PEMBERITAHUAN OWNER
-
-${isi}`
-      }
-    )
-  }
-
-  return reply(
-    sock,
-    from,
-    msg,
-    "✅ Broadcast berhasil"
-  )
-}
-
-// =========================
-// AUTOPOST
-// =========================
-if (command === ".autopost") {
-
-  if (
-    currentRole !== "premium" &&
-    currentRole !== "owner"
-  ) return
-
-  if (!isAdmin) {
-
-    return reply(
-      sock,
-      from,
-      msg,
-      "❌ Khusus admin"
-    )
-  }
-
-  const args =
-    cmd.split(" ")
-
-  const jumlah =
-    parseInt(
-      args[args.length - 2]
-    )
-
-  const jam =
-    parseInt(
-      args[args.length - 1]
-    )
-
-  const textPost =
-    args.slice(1, -2).join(" ")
-
-  if (
-    !textPost ||
-    !jumlah ||
-    !jam
-  ) {
-
-    return reply(
-      sock,
-      from,
-      msg,
-`.autopost Halo 5 1
-
-5x setiap 1 jam`
-    )
-  }
-
-  reply(
-    sock,
-    from,
-    msg,
-`✅ Autopost dimulai
-
-Jumlah:
-${jumlah}
-
-Interval:
-${jam} jam`
-  )
-
-  let done = 0
-
-  const interval =
-    setInterval(async () => {
-
-      done++
-
-      await sock.sendMessage(from, {
-        text: textPost
-      })
-
-      if (done >= jumlah) {
-
-        clearInterval(interval)
-
-        await sock.sendMessage(from, {
-          text:
-`✅ Autopost selesai`
-        })
-      }
-
-    }, jam * 3600000)
+  return sock.sendMessage(from, {
+    text: txt
+  })
 }
 
 // =========================
