@@ -333,11 +333,9 @@ if (!msg) return
       // =========================
       // AUTO READ
       // =========================
-      setTimeout(() => {
+setTimeout(() => {
   sock.readMessages([msg.key])
-}, 2000)([
-        msg.key
-      ])
+}, 2000)
 
       // =========================
       // SENDER
