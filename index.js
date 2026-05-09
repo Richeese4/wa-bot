@@ -128,11 +128,6 @@ function isGroupLink(text) {
 }
 
 // =========================
-// NORMALIZE ID
-// =========================
-function normalize(id = "") {
-
-  // =========================
 // REPLY MESSAGE
 // =========================
 async function reply(sock, from, msg, text) {
@@ -163,6 +158,11 @@ function getLevel(xp = 0) {
     0.1 * Math.sqrt(xp)
   )
 }
+
+// =========================
+// NORMALIZE ID
+// =========================
+function normalize(id = "") {
 
   return id
     .replace(/:\d+/g, "")
@@ -390,7 +390,34 @@ if (!isGroup) {
         ""
 
       if (!text) return
- // =========================
+      const cmd = text.trim()
+
+      const command =
+        cmd.split(" ")[0].toLowerCase()
+
+      console.log(
+        "[MESSAGE]",
+        sender,
+        command
+      )
+
+// =========================
+// SETTINGS
+// =========================
+let settings =
+  await GroupSettings.findOne({
+    group: from
+  })
+
+if (!settings) {
+
+  settings =
+    await GroupSettings.create({
+      group: from
+    })
+}
+
+// =========================
 // XP SYSTEM
 // =========================
 if (isGroup) {
@@ -440,34 +467,7 @@ untuk naik level berikutnya!`
     )
   }
 }
-
-      const cmd = text.trim()
-
-      const command =
-        cmd.split(" ")[0].toLowerCase()
-
-      console.log(
-        "[MESSAGE]",
-        sender,
-        command
-      )
-
-      // =========================
-      // SETTINGS
-      // =========================
-      let settings =
-        await GroupSettings.findOne({
-          group: from
-        })
-
-      if (!settings) {
-
-        settings =
-          await GroupSettings.create({
-            group: from
-          })
-      }
-
+      
       // =========================
       // SESSION
       // =========================
