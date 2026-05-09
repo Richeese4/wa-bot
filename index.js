@@ -338,8 +338,7 @@ async function startBot() {
   msg.key.participant || msg.key.remoteJid
 
 async function reply(text) {
-  return sock.sendMessage(from, {
-    text,
+  return reply(,
     mentions: [senderJid]
   }, {
     quoted: msg
@@ -553,13 +552,10 @@ if (isGroup) {
         command !== ".login"
       ) {
 
-        return sock.sendMessage(from, {
-          text:
-`❌ Admin group belum login
+        return reply("@"+sender+" ❌ Admin group belum login
 
 Silahkan login:
-.login key`
-        })
+.login key")
       }
 
       // =========================
@@ -569,10 +565,7 @@ Silahkan login:
 
         if (!isGroup) {
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Login hanya di group"
-          })
+          return reply("@"+sender+" ❌ Login hanya di group")
         }
 
         const inputKey =
@@ -580,10 +573,7 @@ Silahkan login:
 
         if (!inputKey) {
 
-          return sock.sendMessage(from, {
-            text:
-`.login KEY-XXXX`
-          })
+          return reply("@"+sender+" .login KEY-XXXX")
         }
 
         const isOwner =
@@ -591,10 +581,7 @@ Silahkan login:
 
         if (!isAdmin && !isOwner) {
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Hanya admin group"
-          })
+          return reply("@"+sender+"❌ Hanya admin group")
         }
 
         // OWNER LOGIN
@@ -613,12 +600,11 @@ Silahkan login:
             { upsert: true }
           )
 
-          return sock.sendMessage(from, {
-            text:
-`👑 OWNER LOGIN SUCCESS
+          return reply(
+`👑 OWNER LOGIN SUCCESS @${sender}
 
 ✅ Bot aktif`
-          })
+)
         }
 
         // USER LOGIN
@@ -634,10 +620,7 @@ Silahkan login:
           Date.now() > data.expired
         ) {
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Key invalid / expired"
-          })
+          return reply("@"+sender+"❌ Key invalid / expired")
         }
 
         await Session.findOneAndUpdate(
@@ -653,17 +636,15 @@ Silahkan login:
           { upsert: true }
         )
 
-        return sock.sendMessage(from, {
-          text:
-`✅ LOGIN SUCCESS
+return reply(
+`✅ LOGIN SUCCESS @${sender}
 
 📞 Contact Owner:
 wa.me/${OWNER_NUMBER}
 
 📅 Expired:
-${format(data.expired)}`,
-          mentions: [`${sender}@s.whatsapp.net`]
-        })
+${format(data.expired)}`
+)
       }
 
       // =========================
@@ -703,17 +684,16 @@ if (
     key: session.key
   })
 
-  return sock.sendMessage(from, {
-    text:
-`❌ KEY SUDAH EXPIRED
+  return reply(
+`❌ KEY SUDAH EXPIRED @${sender}
 
 🔑 Key:
 ${session.key}
 
 📞 Silahkan perpanjang ke owner:
 wa.me/${OWNER_NUMBER}`
-  })
-}
+)
+  }
 
       // =========================
       // USER LIMIT
@@ -735,10 +715,7 @@ wa.me/${OWNER_NUMBER}`
         !userLimit.includes(command)
       ) {
 
-        return sock.sendMessage(from, {
-          text:
-            "❌ Akses user terbatas"
-        })
+        return reply("❌ @"+sender+" Akses Mu Terbatas")
       }
 
       // =========================
@@ -904,22 +881,21 @@ if (
     key: session.key
   })
 
-  return sock.sendMessage(from, {
-    text:
-`❌ KEY SUDAH EXPIRED
+  return reply(
+`@${sender} ❌ KEY ANDA SUDAH EXPIRED
 
 📞 Hubungi owner untuk perpanjang:
-
 wa.me/${OWNER_NUMBER}`
-  })
+)
+
 }
 
         // OWNER
         if (currentRole === "owner") {
 
-          return sock.sendMessage(from, {
-            text:
-`👑 OWNER MENU
+          return reply(
+`HALO BOSS @${sender}
+👑 OWNER MENU
 
 🔑 KEY SYSTEM
 .genkey <hari>
@@ -941,15 +917,16 @@ wa.me/${OWNER_NUMBER}`
 📌 OTHER
 .linkgroup
 .sticker`
-          })
+)
+
         }
 
         // PREMIUM
         if (currentRole === "premium") {
 
-          return sock.sendMessage(from, {
-            text:
-`⭐ PREMIUM MENU
+          return reply(
+`HALLO KAK @${sender}
+⭐ PREMIUM MENU
 
 👮 GROUP
 .antilink on/off
@@ -962,13 +939,14 @@ wa.me/${OWNER_NUMBER}`
 .linkgroup
 .sticker
 .owner`
-          })
+)
+
         }
 
         // USER
-        return sock.sendMessage(from, {
-          text:
-`📌 USER MENU
+        return reply(
+`HALLO KAK @${sender}
+📌 USER MENU
 
 👮 GROUP
 .linkgroup
@@ -978,7 +956,7 @@ wa.me/${OWNER_NUMBER}`
 .sticker
 .masaaktif
 .owner`
-        })
+)
       }
 
       // =========================
@@ -989,13 +967,14 @@ wa.me/${OWNER_NUMBER}`
         if (currentRole === "owner")
           return
 
-        return sock.sendMessage(from, {
-          text:
-`👑 OWNER MENU
+        return reply(
+`HALLO KAK @${sender}
+SILAHKAN JIKA INGIN BERTANYA
+ATAU MENYEWA
 
 .contact
 .sewabot`
-        })
+)
       }
 
       // =========================
@@ -1003,12 +982,12 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       if (command === ".contact") {
 
-        return sock.sendMessage(from, {
-          text:
-`📞 CONTACT OWNER
+        return reply(
+`HALLO KAK @${sender}
+📞 CONTACT OWNER
 
 wa.me/${OWNER_NUMBER}`
-        })
+)
       }
 
       // =========================
@@ -1016,8 +995,7 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       if (command === ".sewabot") {
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
 `📦 LIST SEWA BOT
 
 ⭐ USER
@@ -1030,7 +1008,7 @@ wa.me/${OWNER_NUMBER}`
 
 📞 ORDER:
 wa.me/${OWNER_NUMBER}`
-        })
+)
       }
 
       // =========================
@@ -1056,11 +1034,12 @@ return reply("❌ @"+sender+" khusus admin")
           .includes(value)
         ) {
 
-          return sock.sendMessage(from, {
-            text:
-`.antilink on
+         return reply(
+`PERINTAH SALAH ❌
+
+.antilink on
 .antilink off`
-          })
+)
         }
 
         settings.antilink =
@@ -1068,10 +1047,9 @@ return reply("❌ @"+sender+" khusus admin")
 
         await settings.save()
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
 `✅ Antilink ${value}`
-        })
+)
       }
 
       // =========================
@@ -1099,10 +1077,9 @@ return reply("❌ @"+sender+" khusus admin")
           jumlah < 1
         ) {
 
-          return sock.sendMessage(from, {
-            text:
+         return reply(
 `.autokick 3`
-          })
+)
         }
 
         settings.maxwarn =
@@ -1110,11 +1087,10 @@ return reply("❌ @"+sender+" khusus admin")
 
         await settings.save()
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
 `✅ AutoKick:
 ${jumlah} warning`
-        })
+)
       }
 
       // =========================
@@ -1142,11 +1118,10 @@ return reply("❌ @"+sender+" khusus admin")
 
         if (!action) {
 
-          return sock.sendMessage(from, {
-            text:
+          return reply(
 `.filterchat add kata
 .filterchat del kata`
-          })
+)
         }
 
         // ADD
@@ -1154,10 +1129,9 @@ return reply("❌ @"+sender+" khusus admin")
 
           if (!word) {
 
-            return sock.sendMessage(from, {
-              text:
+            return reply(
 `.filterchat add kata`
-            })
+)
           }
 
           if (
@@ -1171,11 +1145,10 @@ return reply("❌ @"+sender+" khusus admin")
             await settings.save()
           }
 
-          return sock.sendMessage(from, {
-            text:
+          return reply(
 `✅ Ditambahkan:
 ${word}`
-          })
+)
         }
 
         // DELETE
@@ -1188,11 +1161,10 @@ ${word}`
 
           await settings.save()
 
-          return sock.sendMessage(from, {
-            text:
+          return reply(
 `✅ Dihapus:
 ${word}`
-          })
+)
         }
       }
 
@@ -1213,10 +1185,9 @@ return reply("❌ @"+sender+" khusus admin")
 
         if (!botAdmin) {
 
-          return sock.sendMessage(from, {
-            text:
+          return reply(
               "❌ Bot bukan admin"
-          })
+)
         }
 
         let target
@@ -1244,10 +1215,9 @@ return reply("❌ @"+sender+" khusus admin")
 
           if (!nomor) {
 
-            return sock.sendMessage(from, {
-              text:
+            return reply(
 `.kick 628xxxx`
-            })
+)
           }
 
           target =
@@ -1262,10 +1232,9 @@ return reply("❌ @"+sender+" khusus admin")
           "remove"
         )
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
             "✅ Berhasil kick member"
-        })
+)
       }
 
       // =========================
@@ -1276,10 +1245,9 @@ return reply("❌ @"+sender+" khusus admin")
         const code =
           await sock.groupInviteCode(from)
 
-        return sock.sendMessage(from, {
-          text:
+       return reply(
             "https://chat.whatsapp.com/" + code
-        })
+)
       }
 
       // =========================
@@ -1287,10 +1255,9 @@ return reply("❌ @"+sender+" khusus admin")
       // =========================
       if (command === ".sticker") {
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
             "✅ Sticker system aktif"
-        })
+)
       }
 
       // =========================
@@ -1298,13 +1265,12 @@ return reply("❌ @"+sender+" khusus admin")
       // =========================
       if (command === ".masaaktif") {
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
 `📅 MASA AKTIF BOT
 
 Expired:
 ${format(session.expired)}`
-        })
+)
       }
 
       // =========================
@@ -1322,10 +1288,9 @@ ${format(session.expired)}`
 
         if (!hari) {
 
-          return sock.sendMessage(from, {
-            text:
+          return reply(
 `.genkey 7`
-          })
+)
         }
 
         const key =
@@ -1349,15 +1314,14 @@ ${format(session.expired)}`
           createdAt: Date.now()
         })
 
-        return sock.sendMessage(from, {
-          text:
+        return reply(
 `✅ USER KEY
 
 🔑 ${key}
 
 ⏳ ${hari} Hari
 📅 ${format(exp)}`
-        })
+)
       }
 
       // =========================
@@ -1375,10 +1339,9 @@ ${format(session.expired)}`
 
         if (!hari) {
 
-          return sock.sendMessage(from, {
-            text:
+          return reply(
 `.genprem 30`
-          })
+)
         }
 
         const key =
@@ -1402,15 +1365,14 @@ ${format(session.expired)}`
           createdAt: Date.now()
         })
 
-        return sock.sendMessage(from, {
-          text:
+       return reply(
 `⭐ PREMIUM KEY
 
 🔑 ${key}
 
 ⏳ ${hari} Hari
 📅 ${format(exp)}`
-        })
+)
       }
 
 // =========================
@@ -1419,9 +1381,7 @@ ${format(session.expired)}`
 if (command === ".panel") {
 
   if (currentRole !== "owner") {
-    return sock.sendMessage(from, {
-      text: "❌ Perintah ini khusus owner"
-    })
+    return reply( "❌ Perintah ini khusus owner")
   }
 
   const users = await User.find()
@@ -1431,7 +1391,7 @@ if (command === ".panel") {
 
   if (users.length < 1) {
     txt += "Tidak ada key"
-    return sock.sendMessage(from, { text: txt })
+    return reply( text: txt )
   }
 
   for (const user of users) {
@@ -1494,9 +1454,8 @@ const session =
 `
   }
 
-  return sock.sendMessage(from, {
-    text: txt
-  })
+  return reply(
+)
 }
       
 // =========================
@@ -1506,9 +1465,7 @@ if (command === ".addtime") {
 
   if (currentRole !== "owner") {
 
-    return sock.sendMessage(from, {
-      text: "❌ Khusus owner"
-    })
+    return reply("❌ Khusus owner")
   }
 
   const key =
@@ -1519,10 +1476,8 @@ if (command === ".addtime") {
 
   if (!key || !hari) {
 
-    return sock.sendMessage(from, {
-      text:
-`.addtime KEY-XXXX 30`
-    })
+return reply(
+`.addtime KEY-XXXX 30`)
   }
 
   const user =
@@ -1532,9 +1487,7 @@ if (command === ".addtime") {
 
   if (!user) {
 
-    return sock.sendMessage(from, {
-      text: "❌ Key tidak ditemukan"
-    })
+    return reply("❌ Key tidak ditemukan")
   }
 
   // TAMBAH MASA AKTIF
@@ -1579,15 +1532,13 @@ wa.me/${OWNER_NUMBER}`
     })
   }
 
-  return sock.sendMessage(from, {
-    text:
+  return reply(
 `✅ Berhasil tambah masa aktif
 
 🔑 ${user.key}
 
 📅 Expired Baru:
-${format(user.expired)}`
-  })
+${format(user.expired)}`)
 }
 
 // =========================
@@ -1597,9 +1548,7 @@ if (command === ".deltime") {
 
   if (currentRole !== "owner") {
 
-    return sock.sendMessage(from, {
-      text: "❌ Khusus owner"
-    })
+   return reply("❌ Khusus owner")
   }
 
   const key =
@@ -1610,10 +1559,9 @@ if (command === ".deltime") {
 
   if (!key || !hari) {
 
-    return sock.sendMessage(from, {
-      text:
+    return reply(
 `.deltime KEY-XXXX 7`
-    })
+)
   }
 
   const user =
@@ -1623,9 +1571,7 @@ if (command === ".deltime") {
 
   if (!user) {
 
-    return sock.sendMessage(from, {
-      text: "❌ Key tidak ditemukan"
-    })
+    return reply("❌ Key tidak ditemukan")
   }
 
   // KURANGI MASA AKTIF
@@ -1670,13 +1616,12 @@ wa.me/${OWNER_NUMBER}`
     })
   }
 
-  return sock.sendMessage(from, {
-    text:
+  return reply(
 `✅ Berhasil kurangi masa aktif
 
 📅 Expired Baru:
 ${format(user.expired)}`
-  })
+)
 }
 
 // =========================
@@ -1686,9 +1631,7 @@ if (command === ".delkey") {
 
   if (currentRole !== "owner") {
 
-    return sock.sendMessage(from, {
-      text: "❌ Khusus owner"
-    })
+    return reply("❌ Khusus owner")
   }
 
   const key =
@@ -1696,10 +1639,8 @@ if (command === ".delkey") {
 
   if (!key) {
 
-    return sock.sendMessage(from, {
-      text:
-`.delkey KEY-XXXX`
-    })
+    return reply(
+`.delkey KEY-XXXX`)
   }
 
   const user =
@@ -1709,9 +1650,7 @@ if (command === ".delkey") {
 
   if (!user) {
 
-    return sock.sendMessage(from, {
-      text: "❌ Key tidak ditemukan"
-    })
+   return reply("❌ Key tidak ditemukan")
   }
 
   // CARI SESSION
@@ -1747,12 +1686,10 @@ wa.me/${OWNER_NUMBER}`
     key: user.key
   })
 
-  return sock.sendMessage(from, {
-    text:
+  return reply(
 `✅ Key berhasil dihapus
 
-🔑 ${user.key}`
-  })
+🔑 ${user.key}`)
 }
 
     } catch (e) {
