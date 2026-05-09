@@ -517,8 +517,8 @@ if (isGroup) {
   botAdmin =
     bot?.admin === "admin" ||
     bot?.admin === "superadmin"
-}
-
+}   // <-- wajib ada ini
+      
   // =========================
   // SEMUA ID USER
   // =========================
@@ -973,7 +973,13 @@ Member akan dikeluarkan`,
       setTimeout(resolve, 1500)
     )
 
-    const meta = await getGroupMeta(sock, from)
+  if (isGroup) {
+  const meta = await getGroupMeta(sock, from)
+  ...
+}   // <-- ditutup di sini
+
+// lalu di bawah masih pakai meta.participants ❌
+meta.participants.forEach(...)
 
 const target = senderJid
 
