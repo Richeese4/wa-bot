@@ -198,10 +198,20 @@ async function startBot() {
 
       console.log("RECONNECT:", shouldReconnect)
 
- if (shouldReconnect) {
-   setTimeout(() => {
+let reconnecting = false
+
+if (connection === "close") {
+  const shouldReconnect =
+    lastDisconnect?.error?.output?.statusCode !==
+    DisconnectReason.loggedOut
+
+  if (shouldReconnect && !reconnecting) {
+    reconnecting = true
+    setTimeout(() => {
+      reconnecting = false
       startBot()
-   }, 3000)
+    }, 3000)
+  }
 }
     }
   })
