@@ -131,6 +131,34 @@ function normalize(id = "") {
 // =========================
 // START BOT
 // =========================
+async function cleanExpired() {
+
+  const expired =
+    await User.find({
+      expired: {
+        $lt: Date.now(),
+        $ne: 9999999999999
+      }
+    })
+
+  for (const x of expired) {
+
+    await Session.deleteMany({
+      key: x.key
+    })
+
+    await User.deleteOne({
+      key: x.key
+    })
+  }
+
+  console.log(
+    "AUTO CLEAN:",
+    expired.length,
+    "expired keys deleted"
+  )
+}
+
 async function startBot() {
 
   const { state, saveCreds } =
@@ -1386,47 +1414,91 @@ ${format(session.expired)}`
       }
 
 // =========================
-// PANEL
+// PANEL FIX TOTAL
 // =========================
 if (command === ".panel") {
 
-  // BUKAN OWNER
   if (currentRole !== "owner") {
-
     return sock.sendMessage(from, {
-      text:
-`❌ Perintah ini khusus owner bot`
+      text: "❌ Perintah ini khusus owner"
     })
   }
 
-  const all =
-    await User.find()
+  const users = await User.find()
+  const sessions = await Session.find()
 
-  let txt =
-    "📌 ACTIVE KEYS\n\n"
+  let txt = "📌 PANEL KEY STATUS\n\n"
 
-  if (all.length < 1) {
+  if (users.length < 1) {
+    txt += "Tidak ada key"
+    return sock.sendMessage(from, { text: txt })
+  }
 
-    txt += "Tidak ada key aktif"
+  for (const user of users) {
 
-  } else {
+    // cari session berdasarkan key
+const userSessions =
+  sessions.filter(x => x.key === user.key)
 
-    all.forEach((x, i) => {
+const session =
+  userSessions[0]
 
-      txt +=
-`${i + 1}. ${x.key}
-Role: ${x.role}
-Expired: ${format(x.expired)}
+    let status = "🕒 Belum Redeem"
+    let groupName = "-"
+
+    // ======================
+    // KEY EXPIRED
+    // ======================
+    if (
+      user.expired !== 9999999999999 &&
+      Date.now() > user.expired
+    ) {
+
+      status = "❌ Expired"
+
+      // hapus session lama otomatis
+      await Session.deleteMany({
+        key: user.key
+      })
+    }
+
+    // ======================
+    // KEY AKTIF
+    // ======================
+    else if (session) {
+
+      status = "✅ Aktif"
+
+      try {
+        const meta =
+          await sock.groupMetadata(
+            session.group
+          )
+
+        groupName =
+          meta.subject || "Unknown Group"
+
+      } catch {
+        groupName = "Group tidak ditemukan"
+      }
+    }
+
+    txt +=
+`${status}
+
+🔑 ${user.key}
+👤 ${user.role}
+📅 ${format(user.expired)}
+👥 ${groupName}
 
 `
-    })
   }
 
   return sock.sendMessage(from, {
     text: txt
   })
 }
-
+      
 // =========================
 // ADDTIME
 // =========================
@@ -1693,4 +1765,9 @@ wa.me/${OWNER_NUMBER}`
   })
 }
 
-startBot()
+// =========================
+// START
+// =========================
+cleanExpired()
+  .then(() => startBot())
+  .catch(console.error)
