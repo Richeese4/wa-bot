@@ -23,8 +23,9 @@ const OWNER_NUMBER = "6282162625200"
 const MONGO_URI =
   "mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority"
 
-mongoose.connect(MONGO_URI, {
-  serverSelectionTimeoutMS: 15000
+mongoose.connect(MONGO_URI,{
+  serverSelectionTimeoutMS:15000,
+  autoIndex:true
 })
 .then(() => console.log("MongoDB CONNECTED"))
 .catch(err => console.log("MongoDB ERROR:", err.message))
@@ -77,6 +78,26 @@ const GroupSettings = mongoose.model("GroupSettings", new mongoose.Schema({
   }
 }))
 
+const XP = mongoose.model("XP", new mongoose.Schema({
+  group: String,
+  user: String,
+
+  xp: {
+    type: Number,
+    default: 0
+  },
+
+  level: {
+    type: Number,
+    default: 0
+  },
+
+  lastChat: {
+    type: Number,
+    default: 0
+  }
+}))
+
 // =========================
 // EXPRESS
 // =========================
@@ -105,12 +126,12 @@ function format(ms) {
 }
 
 // =========================
-// DETECT LINK
+// DETECT LINK WHATSAPP GROUP ONLY
 // =========================
 function isLink(text) {
 
   const regex =
-    /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me)/gi
+    /(?:https?:\/\/)?chat\.whatsapp\.com\/[A-Za-z0-9]{20,}/gi
 
   return regex.test(text)
 }
@@ -205,9 +226,11 @@ async function startBot() {
 
       console.log("RECONNECT:", shouldReconnect)
 
-      if (shouldReconnect) {
-        startBot()
-      }
+if (shouldReconnect) {
+   setTimeout(() => {
+      startBot()
+   }, 3000)
+}
     }
   })
 
@@ -242,61 +265,64 @@ async function startBot() {
   // =========================
   // WELCOME / LEAVE
   // =========================
-  sock.ev.on("group-participants.update", async (m) => {
+sock.ev.on("group-participants.update", async (m) => {
+  try {
 
-    try {
+    // MEMBER MASUK
+    if (m.action === "add") {
+      for (let p of m.participants) {
 
-      // MEMBER MASUK
-      if (m.action === "add") {
+        // reset level saat join ulang
+        await XP.deleteOne({
+          group: m.id,
+          user: normalize(p)
+        })
 
-        for (let p of m.participants) {
-
-          if (fs.existsSync("./welcome.jpg")) {
-
-            await sock.sendMessage(m.id, {
-              image: fs.readFileSync("./welcome.jpg"),
-              caption: `👋 Welcome @${p.split("@")[0]}`,
-              mentions: [p]
-            })
-
-          } else {
-
-            await sock.sendMessage(m.id, {
-              text: `👋 Welcome @${p.split("@")[0]}`,
-              mentions: [p]
-            })
-          }
+        if (fs.existsSync("./welcome.jpg")) {
+          await sock.sendMessage(m.id, {
+            image: fs.readFileSync("./welcome.jpg"),
+            caption: `👋 Welcome @${p.split("@")[0]}`,
+            mentions: [p]
+          })
+        } else {
+          await sock.sendMessage(m.id, {
+            text: `👋 Welcome @${p.split("@")[0]}`,
+            mentions: [p]
+          })
         }
       }
-
-      // MEMBER KELUAR
-      if (m.action === "remove") {
-
-        for (let p of m.participants) {
-
-          if (fs.existsSync("./keluar.jpg")) {
-
-            await sock.sendMessage(m.id, {
-              image: fs.readFileSync("./keluar.jpg"),
-              caption: `👋 @${p.split("@")[0]} keluar`,
-              mentions: [p]
-            })
-
-          } else {
-
-            await sock.sendMessage(m.id, {
-              text: `👋 @${p.split("@")[0]} keluar`,
-              mentions: [p]
-            })
-          }
-        }
-      }
-
-    } catch (e) {
-      console.log(e)
     }
-  })
 
+    // MEMBER KELUAR
+    if (m.action === "remove") {
+      for (let p of m.participants) {
+
+        // hapus data xp
+        await XP.deleteOne({
+          group: m.id,
+          user: normalize(p)
+        })
+
+        if (fs.existsSync("./keluar.jpg")) {
+          await sock.sendMessage(m.id, {
+            image: fs.readFileSync("./keluar.jpg"),
+            caption: `👋 @${p.split("@")[0]} keluar`,
+            mentions: [p]
+          })
+        } else {
+          await sock.sendMessage(m.id, {
+            text: `👋 @${p.split("@")[0]} keluar`,
+            mentions: [p]
+          })
+        }
+      }
+    }
+
+  } catch (e) {
+    console.log(e)
+  }
+})
+  
   // =========================
   // MESSAGE
   // =========================
@@ -356,6 +382,62 @@ async function startBot() {
         sender,
         command
       )
+
+// =========================
+// XP SYSTEM
+// =========================
+if (isGroup && !command.startsWith(".")) {
+
+  let userXP =
+    await XP.findOne({
+      group: from,
+      user: sender
+    })
+
+  if (!userXP) {
+    userXP = await XP.create({
+      group: from,
+      user: sender
+    })
+  }
+
+  // anti spam 10 detik
+  if (Date.now() - userXP.lastChat > 10000) {
+
+    const add =
+      Math.floor(Math.random() * 15) + 5
+
+    userXP.xp += add
+    userXP.lastChat = Date.now()
+
+    const targetXP =
+      needXP(userXP.level)
+
+    if (userXP.xp >= targetXP) {
+
+      userXP.level++
+      userXP.xp -= targetXP
+
+      await sock.sendMessage(from, {
+        text:
+`🎉 Selamat @${sender}
+
+Kamu telah naik level!
+
+⭐ Level Baru: ${userXP.level}
+
+Tingkatkan komunikasi mu
+didalam group untuk naik
+level berikutnya!`,
+        mentions: [
+          `${sender}@s.whatsapp.net`
+        ]
+      })
+    }
+
+    await userXP.save()
+  }
+}
 
       // =========================
       // SETTINGS
@@ -574,8 +656,8 @@ Silahkan login:
           })
         }
 
-        const isOwner =
-          inputKey === OWNER_KEY
+const isOwner =
+  inputKey.trim() === OWNER_KEY.trim()
 
         if (!isAdmin && !isOwner) {
 
@@ -708,12 +790,13 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       const userLimit = [
         ".menu",
-        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
         ".owner",
         ".contact",
+        ".level",
+        ".top",
         ".sewabot"
       ]
 
@@ -1198,6 +1281,22 @@ ${word}`
       // =========================
       if (command === ".kick") {
 
+        const meta = await sock.groupMetadata(from)
+
+const targetData =
+  meta.participants.find(
+    x => normalize(x.id) === normalize(target)
+  )
+
+if (
+  targetData?.admin === "admin" ||
+  targetData?.admin === "superadmin"
+){
+  return sock.sendMessage(from,{
+    text:"❌ Tidak bisa kick admin"
+  })
+}
+
         if (
           currentRole !== "premium" &&
           currentRole !== "owner"
@@ -1274,6 +1373,11 @@ ${word}`
       if (command === ".linkgroup") {
 
         const code =
+          if (!botAdmin) {
+  return sock.sendMessage(from,{
+    text:"❌ Bot harus admin"
+  })
+}
           await sock.groupInviteCode(from)
 
         return sock.sendMessage(from, {
@@ -1282,16 +1386,78 @@ ${word}`
         })
       }
 
-      // =========================
-      // STICKER
-      // =========================
-      if (command === ".sticker") {
+// =========================
+// STICKER FIX
+// kirim/reply gambar + .sticker
+// =========================
+if (command === ".sticker") {
 
-        return sock.sendMessage(from, {
-          text:
-            "✅ Sticker system aktif"
-        })
-      }
+  let quoted =
+    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
+
+  let imageMsg = null
+
+  // jika caption langsung di gambar
+  if (msg.message.imageMessage) {
+    imageMsg = msg.message.imageMessage
+  }
+
+  // jika reply gambar
+  else if (quoted?.imageMessage) {
+    imageMsg = quoted.imageMessage
+  }
+
+  if (!imageMsg) {
+    return sock.sendMessage(from, {
+      text:
+`❌ Kirim atau reply gambar dengan caption:
+
+.sticker`
+    })
+  }
+
+  try {
+
+    // download gambar
+    const buffer =
+const mediaMsg = msg.message.imageMessage
+  ? msg
+  : {
+      key: {
+        remoteJid: from,
+        id: msg.message.extendedTextMessage.contextInfo.stanzaId,
+        participant: msg.message.extendedTextMessage.contextInfo.participant
+      },
+      message: quoted
+    }
+
+const buffer =
+  await sock.downloadMediaMessage(
+    mediaMsg,
+    "buffer",
+    {},
+    {
+      logger: P({ level: "silent" }),
+      reuploadRequest: sock.updateMediaMessage
+    }
+  )
+
+    // kirim jadi sticker
+    await sock.sendMessage(from, {
+      sticker: buffer
+    })
+
+  } catch (err) {
+
+    console.log("STICKER ERROR:", err.message)
+
+    await sock.sendMessage(from, {
+      text: "❌ Gagal membuat sticker"
+    })
+  }
+
+  return
+}
 
       // =========================
       // MASA AKTIF
@@ -1306,6 +1472,80 @@ Expired:
 ${format(session.expired)}`
         })
       }
+
+      // =========================
+      // LEVEL
+      // =========================
+      if (command === ".level") {
+
+  const data =
+    await XP.findOne({
+      group: from,
+      user: sender
+    })
+
+  if (!data) {
+    return sock.sendMessage(from, {
+      text: "Level kamu masih 0"
+    })
+  }
+
+  return sock.sendMessage(from, {
+    text:
+`📊 LEVEL INFO
+
+👤 @${sender}
+⭐ Level: ${data.level}
+✨ XP: ${data.xp}/${needXP(data.level)}`,
+    mentions: [
+      `${sender}@s.whatsapp.net`
+    ]
+  })
+}
+
+// =========================
+// TOP LEVEL
+// =========================
+if (command === ".top") {
+
+  const top =
+    await XP.find({
+      group: from
+    })
+    .sort({
+      level: -1,
+      xp: -1
+    })
+    .limit(10)
+
+  if (!top.length) {
+    return sock.sendMessage(from, {
+      text: "Belum ada data"
+    })
+  }
+
+  let txt =
+`🏆 TOP LEVEL GROUP\n\n`
+
+  let no = 1
+
+  for (const x of top) {
+    txt +=
+`${no}. @${x.user}
+⭐ Lv ${x.level}
+✨ ${x.xp} XP
+
+`
+    no++
+  }
+
+  return sock.sendMessage(from, {
+    text: txt,
+    mentions: top.map(
+      x => `${x.user}@s.whatsapp.net`
+    )
+  })
+}
 
       // =========================
       // GENKEY USER
@@ -1768,6 +2008,8 @@ wa.me/${OWNER_NUMBER}`
 // =========================
 // START
 // =========================
-cleanExpired()
+setInterval(() => {
+  cleanExpired()
+}, 3600000)
   .then(() => startBot())
   .catch(console.error)
