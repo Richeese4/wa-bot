@@ -1,4 +1,3 @@
-const sharp = require("sharp")
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
@@ -24,9 +23,8 @@ const OWNER_NUMBER = "6282162625200"
 const MONGO_URI =
   "mongodb+srv://znoidfamz_db_user:hHoRUaiak5EuQAft@znoidfamz.svbkerf.mongodb.net/bot?retryWrites=true&w=majority"
 
-mongoose.connect(MONGO_URI,{
-  serverSelectionTimeoutMS:15000,
-  socketTimeoutMS:45000
+mongoose.connect(MONGO_URI, {
+  serverSelectionTimeoutMS: 15000
 })
 .then(() => console.log("MongoDB CONNECTED"))
 .catch(err => console.log("MongoDB ERROR:", err.message))
@@ -79,21 +77,6 @@ const GroupSettings = mongoose.model("GroupSettings", new mongoose.Schema({
   }
 }))
 
-const XP =
-mongoose.model("XP",
-new mongoose.Schema({
- group:String,
- user:String,
- xp:{
-  type:Number,
-  default:0
- },
- level:{
-  type:Number,
-  default:0
- }
-}))
-
 // =========================
 // EXPRESS
 // =========================
@@ -103,11 +86,8 @@ app.get("/", (_, res) => {
   res.send("BOT ACTIVE")
 })
 
-const PORT =
-  process.env.PORT || 3000
-
-app.listen(PORT, () => {
-  console.log("Express Running:", PORT)
+app.listen(3000, () => {
+  console.log("Express Running")
 })
 
 // =========================
@@ -127,10 +107,10 @@ function format(ms) {
 // =========================
 // DETECT LINK
 // =========================
-function isWhatsAppGroupLink(text="") {
+function isLink(text) {
 
   const regex =
-    /(https?:\/\/)?chat\.whatsapp\.com\/[A-Za-z0-9]+/gi
+    /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me)/gi
 
   return regex.test(text)
 }
@@ -151,7 +131,6 @@ function normalize(id = "") {
 // =========================
 // START BOT
 // =========================
-const autoPost = {}
 async function startBot() {
 
   const { state, saveCreds } =
@@ -198,21 +177,9 @@ async function startBot() {
 
       console.log("RECONNECT:", shouldReconnect)
 
-let reconnecting = false
-
-if (connection === "close") {
-  const shouldReconnect =
-    lastDisconnect?.error?.output?.statusCode !==
-    DisconnectReason.loggedOut
-
-  if (shouldReconnect && !reconnecting) {
-    reconnecting = true
-    setTimeout(() => {
-      reconnecting = false
-      startBot()
-    }, 3000)
-  }
-}
+      if (shouldReconnect) {
+        startBot()
+      }
     }
   })
 
@@ -279,11 +246,6 @@ if (connection === "close") {
 
         for (let p of m.participants) {
 
-          await XP.deleteMany({
-  group: m.id,
-  user: normalize(p)
-})
-
           if (fs.existsSync("./keluar.jpg")) {
 
             await sock.sendMessage(m.id, {
@@ -314,10 +276,9 @@ if (connection === "close") {
 
     try {
 
-      const msg = messages?.[0]
-if (!msg) return
+      const msg = messages[0]
 
-   if (msg.key.id.startsWith("BAE5")) return
+      if (!msg.message) return
 
       if (msg.key.remoteJid === "status@broadcast")
         return
@@ -333,43 +294,27 @@ if (!msg) return
       // =========================
       // AUTO READ
       // =========================
-setTimeout(() => {
-  sock.readMessages([msg.key])
-}, 2000)
+      await sock.readMessages([
+        msg.key
+      ])
 
       // =========================
       // SENDER
       // =========================
-const sender =
-  normalize(
-    msg.key.participant || from
-  )
+      const sender =
+        normalize(
+          msg.key.participant || from
+        )
 
-if (
-  !isGroup &&
-  sender !== OWNER_NUMBER
-) return
-      
       // =========================
       // TEXT
       // =========================
-const m = msg?.message || {}
-
-const text =
-  m.conversation ||
-  m.extendedTextMessage?.text ||
-  m.imageMessage?.caption ||
-  m.videoMessage?.caption ||
-  m.documentMessage?.caption ||
-  m.buttonsResponseMessage?.selectedButtonId ||
-  m.listResponseMessage?.singleSelectReply?.selectedRowId ||
-  m.templateButtonReplyMessage?.selectedId ||
-  m.interactiveResponseMessage?.body?.text ||
-  m.viewOnceMessage?.message?.imageMessage?.caption ||
-  m.viewOnceMessage?.message?.videoMessage?.caption ||
-  m.ephemeralMessage?.message?.conversation ||
-  m.ephemeralMessage?.message?.extendedTextMessage?.text ||
-  ""
+      const text =
+        msg.message.conversation ||
+        msg.message.extendedTextMessage?.text ||
+        msg.message.imageMessage?.caption ||
+        msg.message.videoMessage?.caption ||
+        ""
 
       if (!text) return
 
@@ -377,46 +322,6 @@ const text =
 
       const command =
         cmd.split(" ")[0].toLowerCase()
-
-      if (isGroup && !command.startsWith(".")) {
-
-  let data =
-    await XP.findOne({
-      group: from,
-      user: sender
-    })
-
-  if (!data) {
-    data = await XP.create({
-      group: from,
-      user: sender
-    })
-  }
-
-  data.xp += 5
-
-  const next =
-    (data.level + 1) * 100
-
-  if (data.xp >= next) {
-
-    data.level++
-
-    await sock.sendMessage(from,{
-      text:
-`🎉 Selamat @${sender}
-
-Kamu naik level ${data.level}
-
-Tingkatkan komunikasi mu untuk naik level berikutnya`,
-      mentions:[
-        `${sender}@s.whatsapp.net`
-      ]
-    })
-  }
-
-  await data.save()
-}
 
       console.log(
         "[MESSAGE]",
@@ -452,7 +357,6 @@ Tingkatkan komunikasi mu untuk naik level berikutnya`,
             group: from
           })
       }
-
 // =========================
 // ADMIN CHECK ULTRA FIX
 // =========================
@@ -462,63 +366,8 @@ let botAdmin = false
 if (isGroup) {
 
   const meta =
-    await getGroupMeta(sock, from)
+    await sock.groupMetadata(from)
 
-  const senderIds = []
-
-  if (msg.key.participant) {
-    senderIds.push(
-      normalize(msg.key.participant)
-    )
-  }
-
-  senderIds.push(
-    normalize(sender)
-  )
-
-  const botIds = []
-
-  if (sock.user?.id) {
-    botIds.push(
-      normalize(sock.user.id)
-    )
-  }
-
-  if (sock.user?.lid) {
-    botIds.push(
-      normalize(sock.user.lid)
-    )
-  }
-
-  if (sock.user?.jid) {
-    botIds.push(
-      normalize(sock.user.jid)
-    )
-  }
-
-  const member =
-    meta.participants.find(x =>
-      senderIds.includes(
-        normalize(x.id)
-      )
-    )
-
-  const bot =
-    meta.participants.find(x =>
-      botIds.includes(
-        normalize(x.id)
-      )
-    )
-
-  isAdmin =
-    member?.admin === "admin" ||
-    member?.admin === "superadmin"
-
-  botAdmin =
-    bot?.admin === "admin" ||
-    bot?.admin === "superadmin"
-}   // <-- wajib ada ini
-      
   // =========================
   // SEMUA ID USER
   // =========================
@@ -800,14 +649,16 @@ ${format(data.expired)}`,
 // EXPIRED
 // =========================
 if (
-  session &&
-  session.expired !== 9999999999999 &&
-  Date.now() > session.expired
+  session?.expired !== 9999999999999 &&
+  Date.now() > session?.expired
 ) {
+
+  // HAPUS SESSION GROUP
   await Session.deleteOne({
     group: from
   })
 
+  // HAPUS KEY EXPIRED DARI PANEL
   await User.deleteOne({
     key: session.key
   })
@@ -816,14 +667,11 @@ if (
     text:
 `❌ KEY SUDAH EXPIRED
 
-🔑 ${session.key}
+🔑 Key:
+${session.key}
 
-Bot sudah nonaktif.
-
-Silahkan hubungi owner untuk perpanjang:
+📞 Silahkan perpanjang ke owner:
 wa.me/${OWNER_NUMBER}`
-  }, {
-    quoted: msg
   })
 }
 
@@ -831,6 +679,8 @@ wa.me/${OWNER_NUMBER}`
       // USER LIMIT
       // =========================
       const userLimit = [
+        ".menu",
+        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
@@ -885,13 +735,13 @@ wa.me/${OWNER_NUMBER}`
 if (
   settings.antilink &&
   isGroup &&
-  isWhatsAppGroupLink(text)
+  isLink(text)
 ) {
 
   // ADMIN & OWNER BYPASS
   if (
     isAdmin ||
-    sender === OWNER_NUMBER
+    sender.includes(OWNER_NUMBER)
   ) return
 
   // BOT HARUS ADMIN
@@ -904,37 +754,31 @@ if (
   // =========================
   // INIT WARNS
   // =========================
-if (!settings.warns[sender]) {
-  settings.warns[sender] = {
-    count: 0,
-    last: Date.now()
+  if (!settings.warns) {
+    settings.warns = {}
   }
-}
 
-if (
-  Date.now() -
-  settings.warns[sender].last >
-  86400000
-) {
-  settings.warns[sender].count = 0
-}
-
-settings.warns[sender].count++
-settings.warns[sender].last =
-  Date.now()
-
-let currentWarn =
-  settings.warns[sender].count
+  // WARNING SEKARANG
+  let currentWarn =
+    Number(settings.warns[sender] || 0)
 
   const maxWarn =
     Number(settings.maxwarn || 3)
+
+  // TAMBAH WARNING
+  currentWarn++
 
   // JANGAN LEWAT BATAS
   if (currentWarn > maxWarn) {
     currentWarn = maxWarn
   }
 
+  // SAVE
+  settings.warns[sender] =
+    currentWarn
+
   settings.markModified("warns")
+
   await settings.save()
 
   // =========================
@@ -973,36 +817,12 @@ Member akan dikeluarkan`,
       setTimeout(resolve, 1500)
     )
 
-  if (isGroup) {
-  const meta = await getGroupMeta(sock, from)
-  ...
-}   // <-- ditutup di sini
-
-// lalu di bawah masih pakai meta.participants ❌
-meta.participants.forEach(...)
-
-const target = senderJid
-
-const victim =
-  meta.participants.find(
-    x => normalize(x.id) === normalize(target)
-  )
-
-if (
-  victim?.admin === "admin" ||
-  victim?.admin === "superadmin"
-){
-  return sock.sendMessage(from,{
-    text:"❌ Tidak bisa kick admin"
-  })
-}
-
     // KICK
-await sock.groupParticipantsUpdate(
-  from,
-  [target],
-  "remove"
-)
+    await sock.groupParticipantsUpdate(
+      from,
+      [senderJid],
+      "remove"
+    )
 
     return
   }
@@ -1030,14 +850,16 @@ Sisa warning: ${left}`,
 
       // CEK SESSION EXPIRED SAAT MENU
 if (
-  session &&
-  session.expired !== 9999999999999 &&
-  Date.now() > session.expired
+  session?.expired !== 9999999999999 &&
+  Date.now() > session?.expired
 ) {
+
+  // HAPUS SESSION
   await Session.deleteOne({
     group: from
   })
 
+  // HAPUS KEY EXPIRED
   await User.deleteOne({
     key: session.key
   })
@@ -1046,14 +868,9 @@ if (
     text:
 `❌ KEY SUDAH EXPIRED
 
-🔑 ${session.key}
+📞 Hubungi owner untuk perpanjang:
 
-Bot sudah nonaktif.
-
-Silahkan hubungi owner untuk perpanjang:
 wa.me/${OWNER_NUMBER}`
-  }, {
-    quoted: msg
   })
 }
 
@@ -1115,6 +932,7 @@ wa.me/${OWNER_NUMBER}`
 
 👮 GROUP
 .linkgroup
+.antilink on/off
 
 📌 OTHER
 .sticker
@@ -1425,72 +1243,28 @@ ${word}`
       // =========================
       // LINK GROUP
       // =========================
-if (command === ".linkgroup") {
+      if (command === ".linkgroup") {
 
- if (!isGroup)
-  return sock.sendMessage(from,{
-    text:"❌ Hanya di group"
-  })
+        const code =
+          await sock.groupInviteCode(from)
 
- try{
-   const code =
-    await sock.groupInviteCode(from)
+        return sock.sendMessage(from, {
+          text:
+            "https://chat.whatsapp.com/" + code
+        })
+      }
 
-   return sock.sendMessage(from,{
-    text:"https://chat.whatsapp.com/"+code
-   })
- }catch{
-   return sock.sendMessage(from,{
-    text:"❌ Bot harus admin"
-   })
- }
-}
       // =========================
       // STICKER
       // =========================
- if (command === ".sticker") {
+      if (command === ".sticker") {
 
-  const quoted =
-    msg.message?.extendedTextMessage
-    ?.contextInfo?.quotedMessage
+        return sock.sendMessage(from, {
+          text:
+            "✅ Sticker system aktif"
+        })
+      }
 
-  const image =
-    quoted?.imageMessage ||
-    msg.message?.imageMessage
-
-  if (!image) {
-    return sock.sendMessage(from,{
-      text:
-"Reply gambar atau kirim gambar dengan caption .sticker"
-    },{ quoted: msg })
-  }
-
-const target = quoted
-  ? {
-      key: msg.key,
-      message: quoted
-    }
-  : msg
-
-const buffer =
-  await sock.downloadMediaMessage(
-    target,
-    "buffer",
-    {},
-    {
-      logger: P({ level:"silent" })
-    }
-  )
-   
-  const webp =
-    await sharp(buffer)
-    .webp()
-    .toBuffer()
-
-  return sock.sendMessage(from,{
-    sticker:webp
-  },{ quoted: msg })
-}
       // =========================
       // MASA AKTIF
       // =========================
@@ -1504,88 +1278,6 @@ Expired:
 ${format(session.expired)}`
         })
       }
-
-      // =========================
-      // AUTO POST
-      // =========================
-      if (command === ".autopost") {
-
- if (
-   currentRole !== "premium" &&
-   currentRole !== "owner"
- ) return
-
- const args =
-   cmd.split(" ")
-
- const jumlah =
-   parseInt(args[args.length-2])
-
- const jam =
-   parseInt(
-    args[args.length-1]
-    .replace("h","")
-   )
-
- const text =
-   args.slice(1,-2).join(" ")
-
- let count = 0
-
- const id =
- setInterval(async()=>{
-
-   count++
-
-   await sock.sendMessage(
-     from,
-     { text }
-   )
-
-   if (count >= jumlah) {
-     clearInterval(id)
-
-     await sock.sendMessage(
-       from,
-       {
-         text:
-"✅ Autopost selesai"
-       }
-     )
-   }
-
- }, jam * 3600000)
-
- autoPost[from] = id
-
- return sock.sendMessage(
-   from,
-   {
-     text:"✅ Autopost dimulai"
-   },
-   { quoted: msg }
- )
-}
-
-      // =========================
-      // STOP AUTO POST
-      // =========================
-
-      if (command === ".stopautopost") {
-
- if (!autoPost[from]) {
-   return sock.sendMessage(from,{
-     text:"❌ Tidak ada autopost aktif"
-   })
- }
-
- clearInterval(autoPost[from])
- delete autoPost[from]
-
- return sock.sendMessage(from,{
-   text:"✅ Autopost dihentikan"
- })
-}
 
       // =========================
       // GENKEY USER
@@ -1698,65 +1390,41 @@ ${format(session.expired)}`
 // =========================
 if (command === ".panel") {
 
-  if (currentRole !== "owner") return
+  // BUKAN OWNER
+  if (currentRole !== "owner") {
 
-  const users = await User.find()
-  const sessions = await Session.find()
-
-  let txt = "📌 ACTIVE PANEL\n\n"
-
-  for (const u of users) {
-
-    const ses = sessions.find(
-      x => x.key === u.key
-    )
-
-    let status = "⏳"
-
-    if (Date.now() > u.expired)
-      status = "❌"
-    else if (ses)
-      status = "✅"
-
-    let groupName = "-"
-    let groupLink = "-"
-
-    if (ses) {
-      try {
-        const meta =
-          await sock.groupMetadata(
-            ses.group
-          )
-
-        groupName = meta.subject
-
-        const code =
-          await sock.groupInviteCode(
-            ses.group
-          )
-
-        groupLink =
-          "https://chat.whatsapp.com/" +
-          code
-
-      } catch {}
-    }
-
-    txt +=
-`${status} ${u.key}
-Role: ${u.role}
-Expired: ${format(u.expired)}
-Group: ${groupName}
-Link: ${groupLink}
-
-`
+    return sock.sendMessage(from, {
+      text:
+`❌ Perintah ini khusus owner bot`
+    })
   }
 
-  return sock.sendMessage(
-    from,
-    { text: txt },
-    { quoted: msg }
-  )
+  const all =
+    await User.find()
+
+  let txt =
+    "📌 ACTIVE KEYS\n\n"
+
+  if (all.length < 1) {
+
+    txt += "Tidak ada key aktif"
+
+  } else {
+
+    all.forEach((x, i) => {
+
+      txt +=
+`${i + 1}. ${x.key}
+Role: ${x.role}
+Expired: ${format(x.expired)}
+
+`
+    })
+  }
+
+  return sock.sendMessage(from, {
+    text: txt
+  })
 }
 
 // =========================
@@ -1766,11 +1434,9 @@ if (command === ".addtime") {
 
   if (currentRole !== "owner") {
 
-return sock.sendMessage(
-  from,
-  { text:"❌ Khusus Owner" },
-  { quoted: msg }
-)
+    return sock.sendMessage(from, {
+      text: "❌ Khusus owner"
+    })
   }
 
   const key =
@@ -1794,11 +1460,9 @@ return sock.sendMessage(
 
   if (!user) {
 
-return sock.sendMessage(
-  from,
-  { text:"❌ Key Tidak Ditemukan" },
-  { quoted: msg }
-)
+    return sock.sendMessage(from, {
+      text: "❌ Key tidak ditemukan"
+    })
   }
 
   // TAMBAH MASA AKTIF
@@ -2019,46 +1683,6 @@ wa.me/${OWNER_NUMBER}`
   })
 }
 
-// =========================
-// Pemberitahuan
-// =========================
-      if (command === ".pemberitahuan") {
-
-  if (currentRole !== "owner")
-    return
-
-  const pesan =
-    cmd.split(" ")
-    .slice(1)
-    .join(" ")
-
-  if (!pesan)
-    return
-
-  const sessions =
-    await Session.find()
-
-  for (const s of sessions) {
-    await sock.sendMessage(
-      s.group,
-      {
-        text:
-`📢 PEMBERITAHUAN OWNER
-
-${pesan}`
-      }
-    )
-  }
-
-  return sock.sendMessage(
-    from,
-    {
-      text:"✅ Broadcast selesai"
-    },
-    { quoted: msg }
-  )
-}
-
     } catch (e) {
 
       console.log(
@@ -2068,13 +1692,5 @@ ${pesan}`
     }
   })
 }
-
-process.on("uncaughtException", err => {
-  console.log("UNCAUGHT:", err.message)
-})
-
-process.on("unhandledRejection", err => {
-  console.log("PROMISE:", err)
-})
 
 startBot()
