@@ -452,6 +452,7 @@ Tingkatkan komunikasi mu untuk naik level berikutnya`,
             group: from
           })
       }
+
 // =========================
 // ADMIN CHECK ULTRA FIX
 // =========================
@@ -460,7 +461,63 @@ let botAdmin = false
 
 if (isGroup) {
 
-const groupCache = {}
+  const meta =
+    await getGroupMeta(sock, from)
+
+  const senderIds = []
+
+  if (msg.key.participant) {
+    senderIds.push(
+      normalize(msg.key.participant)
+    )
+  }
+
+  senderIds.push(
+    normalize(sender)
+  )
+
+  const botIds = []
+
+  if (sock.user?.id) {
+    botIds.push(
+      normalize(sock.user.id)
+    )
+  }
+
+  if (sock.user?.lid) {
+    botIds.push(
+      normalize(sock.user.lid)
+    )
+  }
+
+  if (sock.user?.jid) {
+    botIds.push(
+      normalize(sock.user.jid)
+    )
+  }
+
+  const member =
+    meta.participants.find(x =>
+      senderIds.includes(
+        normalize(x.id)
+      )
+    )
+
+  const bot =
+    meta.participants.find(x =>
+      botIds.includes(
+        normalize(x.id)
+      )
+    )
+
+  isAdmin =
+    member?.admin === "admin" ||
+    member?.admin === "superadmin"
+
+  botAdmin =
+    bot?.admin === "admin" ||
+    bot?.admin === "superadmin"
+}
 
   // =========================
   // SEMUA ID USER
