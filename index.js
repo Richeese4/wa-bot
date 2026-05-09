@@ -1996,8 +1996,6 @@ ${pesan}`
   })
 }
 
-const autoPost = {}
-
 process.on("uncaughtException", err => {
   console.log("UNCAUGHT:", err.message)
 })
