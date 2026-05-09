@@ -334,6 +334,18 @@ async function startBot() {
           msg.key.participant || from
         )
 
+      const senderJid =
+  msg.key.participant || msg.key.remoteJid
+
+async function reply(text) {
+  return sock.sendMessage(from, {
+    text,
+    mentions: [senderJid]
+  }, {
+    quoted: msg
+  })
+}
+
       // =========================
       // TEXT
       // =========================
@@ -773,12 +785,7 @@ if (
   ) return
 
   // BOT HARUS ADMIN
-if (!botAdmin) {
-  return sock.sendMessage(from,{
-    text:
-"❌ Bot harus dijadikan admin terlebih dahulu agar fitur bekerja"
-  })
-}
+  if (!botAdmin) return
 
   // JID ASLI
   const senderJid =
@@ -851,16 +858,6 @@ Member akan dikeluarkan`,
     )
 
     // KICK
-    const isBotAdmin =
-  await requireBotAdmin(sock, from)
-
-if (!isBotAdmin) {
-  return sock.sendMessage(from, {
-    text:
-"❌ Bot harus dijadikan admin terlebih dahulu"
-  })
-}
-    
     await sock.groupParticipantsUpdate(
       from,
       [senderJid],
@@ -1048,10 +1045,7 @@ wa.me/${OWNER_NUMBER}`
 
         if (!isAdmin) {
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
+return reply("❌ @"+sender+" khusus admin")
         }
 
         const value =
@@ -1090,19 +1084,9 @@ wa.me/${OWNER_NUMBER}`
           currentRole !== "owner"
         ) return
 
-const isBotAdmin =
-  await requireBotAdmin(sock, from)
+        if (!isAdmin) {
 
-if (!isBotAdmin) {
-  return sock.sendMessage(from,{
-    text:
-"❌ Bot harus dijadikan admin terlebih dahulu"
-  })
-}
-
-await sock.sendMessage(from,{
-  delete: msg.key
-})
+return reply("❌ @"+sender+" khusus admin")
         }
 
         const jumlah =
@@ -1143,16 +1127,9 @@ ${jumlah} warning`
           currentRole !== "owner"
         ) return
 
-if (!botAdmin) {
-  return sock.sendMessage(from,{
-    text:
-"❌ Bot harus dijadikan admin terlebih dahulu agar bekerja"
-  })
-}
+        if (!isAdmin) {
 
-await sock.sendMessage(from,{
-  delete: msg.key
-})
+return reply("❌ @"+sender+" khusus admin")
         }
 
         const action =
@@ -1231,10 +1208,7 @@ ${word}`
 
         if (!isAdmin) {
 
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
+return reply("❌ @"+sender+" khusus admin")
         }
 
         if (!botAdmin) {
@@ -1297,26 +1271,16 @@ ${word}`
       // =========================
       // LINK GROUP
       // =========================
-if (command === ".linkgroup") {
+      if (command === ".linkgroup") {
 
-  const isBotAdmin =
-    await requireBotAdmin(sock, from)
+        const code =
+          await sock.groupInviteCode(from)
 
-  if (!isBotAdmin) {
-    return sock.sendMessage(from, {
-      text:
-"❌ Bot harus dijadikan admin terlebih dahulu"
-    })
-  }
-
-  const code =
-    await sock.groupInviteCode(from)
-
-  return sock.sendMessage(from, {
-    text:
-"https://chat.whatsapp.com/" + code
-  })
-}
+        return sock.sendMessage(from, {
+          text:
+            "https://chat.whatsapp.com/" + code
+        })
+      }
 
       // =========================
       // STICKER
