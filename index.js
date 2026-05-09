@@ -333,7 +333,9 @@ if (!msg) return
       // =========================
       // AUTO READ
       // =========================
-      await sock.readMessages([
+      setTimeout(() => {
+  sock.readMessages([msg.key])
+}, 2000)([
         msg.key
       ])
 
@@ -460,7 +462,7 @@ let botAdmin = false
 
 if (isGroup) {
 
-const meta = await sock.groupMetadata(from)
+const groupCache = {}
 
   // =========================
   // SEMUA ID USER
@@ -916,7 +918,7 @@ Member akan dikeluarkan`,
       setTimeout(resolve, 1500)
     )
 
-    const meta = await sock.groupMetadata(from)
+    const meta = await getGroupMeta(sock, from)
 
 const target = senderJid
 
