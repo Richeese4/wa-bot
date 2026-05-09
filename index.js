@@ -25,7 +25,8 @@ const MONGO_URI =
 
 mongoose.connect(MONGO_URI,{
   serverSelectionTimeoutMS:15000,
-  autoIndex:true
+  autoIndex:true,
+  dbName:"bot"
 })
 .then(() => console.log("MongoDB CONNECTED"))
 .catch(err => console.log("MongoDB ERROR:", err.message))
@@ -180,6 +181,10 @@ async function cleanExpired() {
   )
 }
 
+function needXP(level) {
+  return 100 + (level * 50)
+}
+
 async function startBot() {
 
   const { state, saveCreds } =
@@ -228,7 +233,7 @@ async function startBot() {
 
 if (shouldReconnect) {
    setTimeout(() => {
-      startBot()
+      return startBot()
    }, 3000)
 }
     }
@@ -657,7 +662,7 @@ Silahkan login:
         }
 
 const isOwner =
-  inputKey.trim() === OWNER_KEY.trim()
+  inputKey?.trim() === OWNER_KEY
 
         if (!isAdmin && !isOwner) {
 
@@ -1279,93 +1284,74 @@ ${word}`
       // =========================
       // KICK
       // =========================
-      if (command === ".kick") {
 
-        const meta = await sock.groupMetadata(from)
+if (command === ".kick") {
 
-const targetData =
-  meta.participants.find(
-    x => normalize(x.id) === normalize(target)
+  if (
+    currentRole !== "premium" &&
+    currentRole !== "owner"
+  ) return
+
+  if (!isAdmin)
+    return sock.sendMessage(from,{
+      text:"❌ Khusus admin"
+    })
+
+  if (!botAdmin)
+    return sock.sendMessage(from,{
+      text:"❌ Bot bukan admin"
+    })
+
+  let target
+
+  if (
+    msg.message.extendedTextMessage
+      ?.contextInfo?.participant
+  ) {
+    target =
+      msg.message.extendedTextMessage
+      .contextInfo.participant
+  } else {
+    const nomor =
+      cmd.split(" ")[1]
+
+    if (!nomor)
+      return sock.sendMessage(from,{
+        text:".kick 628xxxx"
+      })
+
+    target =
+      nomor.replace(/[^0-9]/g,"")
+      + "@s.whatsapp.net"
+  }
+
+  const meta =
+    await sock.groupMetadata(from)
+
+  const targetData =
+    meta.participants.find(
+      x => normalize(x.id) === normalize(target)
+    )
+
+  if (
+    targetData?.admin === "admin" ||
+    targetData?.admin === "superadmin"
+  ) {
+    return sock.sendMessage(from,{
+      text:"❌ Tidak bisa kick admin"
+    })
+  }
+
+  await sock.groupParticipantsUpdate(
+    from,
+    [target],
+    "remove"
   )
 
-if (
-  targetData?.admin === "admin" ||
-  targetData?.admin === "superadmin"
-){
   return sock.sendMessage(from,{
-    text:"❌ Tidak bisa kick admin"
+    text:"✅ Berhasil kick member"
   })
 }
-
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
-
-        if (!isAdmin) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Khusus admin"
-          })
-        }
-
-        if (!botAdmin) {
-
-          return sock.sendMessage(from, {
-            text:
-              "❌ Bot bukan admin"
-          })
-        }
-
-        let target
-
-        // reply
-        if (
-          msg.message
-          .extendedTextMessage
-          ?.contextInfo
-          ?.participant
-        ) {
-
-          target =
-            msg.message
-            .extendedTextMessage
-            .contextInfo
-            .participant
-        }
-
-        // nomor
-        else {
-
-          const nomor =
-            cmd.split(" ")[1]
-
-          if (!nomor) {
-
-            return sock.sendMessage(from, {
-              text:
-`.kick 628xxxx`
-            })
-          }
-
-          target =
-            nomor
-            .replace(/[^0-9]/g, "") +
-            "@s.whatsapp.net"
-        }
-
-        await sock.groupParticipantsUpdate(
-          from,
-          [target],
-          "remove"
-        )
-
-        return sock.sendMessage(from, {
-          text:
-            "✅ Berhasil kick member"
-        })
-      }
 
       // =========================
       // LINK GROUP
@@ -1373,13 +1359,14 @@ if (
       if (command === ".linkgroup") {
 
         const code =
-          if (!botAdmin) {
+ if (!botAdmin) {
   return sock.sendMessage(from,{
     text:"❌ Bot harus admin"
   })
 }
-          await sock.groupInviteCode(from)
 
+const code =
+  await sock.groupInviteCode(from)
         return sock.sendMessage(from, {
           text:
             "https://chat.whatsapp.com/" + code
@@ -1393,24 +1380,33 @@ if (
 if (command === ".sticker") {
 
   let quoted =
-    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
+    msg.message?.extendedTextMessage
+    ?.contextInfo?.quotedMessage
 
   let imageMsg = null
 
-  // jika caption langsung di gambar
   if (msg.message.imageMessage) {
-    imageMsg = msg.message.imageMessage
+    imageMsg = msg
   }
-
-  // jika reply gambar
   else if (quoted?.imageMessage) {
-    imageMsg = quoted.imageMessage
+    imageMsg = {
+      key:{
+        remoteJid: from,
+        id:
+          msg.message.extendedTextMessage
+          .contextInfo.stanzaId,
+        participant:
+          msg.message.extendedTextMessage
+          .contextInfo.participant
+      },
+      message: quoted
+    }
   }
 
   if (!imageMsg) {
-    return sock.sendMessage(from, {
+    return sock.sendMessage(from,{
       text:
-`❌ Kirim atau reply gambar dengan caption:
+`❌ Kirim/reply gambar dengan caption:
 
 .sticker`
     })
@@ -1418,41 +1414,28 @@ if (command === ".sticker") {
 
   try {
 
-    // download gambar
     const buffer =
-const mediaMsg = msg.message.imageMessage
-  ? msg
-  : {
-      key: {
-        remoteJid: from,
-        id: msg.message.extendedTextMessage.contextInfo.stanzaId,
-        participant: msg.message.extendedTextMessage.contextInfo.participant
-      },
-      message: quoted
-    }
+      await sock.downloadMediaMessage(
+        imageMsg,
+        "buffer",
+        {},
+        {
+          logger:P({level:"silent"}),
+          reuploadRequest:
+            sock.updateMediaMessage
+        }
+      )
 
-const buffer =
-  await sock.downloadMediaMessage(
-    mediaMsg,
-    "buffer",
-    {},
-    {
-      logger: P({ level: "silent" }),
-      reuploadRequest: sock.updateMediaMessage
-    }
-  )
-
-    // kirim jadi sticker
-    await sock.sendMessage(from, {
+    await sock.sendMessage(from,{
       sticker: buffer
     })
 
-  } catch (err) {
+  } catch(e){
 
-    console.log("STICKER ERROR:", err.message)
+    console.log(e)
 
-    await sock.sendMessage(from, {
-      text: "❌ Gagal membuat sticker"
+    await sock.sendMessage(from,{
+      text:"❌ Gagal membuat sticker"
     })
   }
 
@@ -2008,8 +1991,10 @@ wa.me/${OWNER_NUMBER}`
 // =========================
 // START
 // =========================
+cleanExpired()
+  .then(() => startBot())
+  .catch(console.error)
+
 setInterval(() => {
   cleanExpired()
 }, 3600000)
-  .then(() => startBot())
-  .catch(console.error)
