@@ -329,20 +329,25 @@ async function startBot() {
       // =========================
       // SENDER
       // =========================
-      const sender =
-        normalize(
-          msg.key.participant || from
-        )
+ const sender =
+  normalize(
+    msg.key.participant || from
+  )
 
-      const senderJid =
+const senderJid =
   msg.key.participant || msg.key.remoteJid
 
 async function reply(text) {
-  return reply(,
-    mentions: [senderJid]
-  }, {
-    quoted: msg
-  })
+  return sock.sendMessage(
+    from,
+    {
+      text: text,
+      mentions: [senderJid]
+    },
+    {
+      quoted: msg
+    }
+  )
 }
 
       // =========================
