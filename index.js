@@ -1059,18 +1059,15 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       // ANTILINK
       // =========================
-      if (command === ".antilink") {
+if (command === ".antilink") {
 
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
+  if (!isGroup) {
+    return reply("❌ Hanya bisa dipakai di group")
+  }
 
-        if (!isAdmin) {
-
-return reply("❌ @"+sender+" khusus admin")
-        }
-
+  if (!isAdmin) {
+    return reply("❌ @" + sender + " khusus admin")
+  }
         const value =
           cmd.split(" ")[1]
 
@@ -1343,7 +1340,7 @@ atau reply gambar lalu ketik:
 
   const sticker =
     new Sticker(imageBuffer, {
-      pack: "ZnoidFamz Bot",
+      pack: "By ZnoidFamz 082162625200",
       author: "ZnoidFamz",
       type: StickerTypes.FULL,
       quality: 100,
