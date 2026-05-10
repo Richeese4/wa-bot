@@ -241,57 +241,56 @@ if (!sock.authState.creds.registered) {
   // =========================
   // CONNECTION
   // =========================
-  sock.ev.on("connection.update", ({
-    connection,
-    qr,
-    lastDisconnect
-  }) => {
+sock.ev.on("connection.update", async ({
+  connection,
+  qr,
+  lastDisconnect
+}) => {
 
-    if (qr) {
-      qrcode.generate(qr, {
-        small: true
-      })
+  if (qr) {
+    qrcode.generate(qr, {
+      small: true
+    })
+  }
+
+  if (connection === "open") {
+    console.log("BOT ONLINE")
+    await saveCreds()
+
+    if (pairingInterval) {
+      clearInterval(pairingInterval)
+      pairingInterval = null
+    }
+  }
+
+  if (connection === "close") {
+
+    if (pairingInterval) {
+      clearInterval(pairingInterval)
+      pairingInterval = null
     }
 
-if (connection === "open") {
-  console.log("BOT ONLINE")
+    const statusCode =
+      lastDisconnect?.error?.output?.statusCode
 
-  if (pairingInterval) {
-    clearInterval(pairingInterval)
-    pairingInterval = null
-  }
-}
+    const shouldReconnect =
+      statusCode !== DisconnectReason.loggedOut
 
-if (connection === "close") {
+    console.log(
+      "DISCONNECTED:",
+      statusCode
+    )
 
-  if (pairingInterval) {
-    clearInterval(pairingInterval)
-    pairingInterval = null
-  }
+    if (shouldReconnect) {
+      console.log("Reconnect 5 detik...")
 
-  const statusCode =
-    lastDisconnect?.error?.output?.statusCode
-
-  const shouldReconnect =
-    statusCode !== DisconnectReason.loggedOut
-
-  console.log(
-    "DISCONNECTED:",
-    statusCode
-  )
-
-  if (shouldReconnect) {
-    console.log("Reconnect 5 detik...")
-setTimeout(async () => {
-  try {
-    await sock.ws.close()
-  } catch {}
-
-  startBot()
-}, 5000)
+      setTimeout(() => {
+        startBot()
+      }, 5000)
+    }
   }
 })
-
+  
   // =========================
   // AUTO TOLAK TELPON
   // =========================
