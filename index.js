@@ -1282,175 +1282,143 @@ return reply("❌ @"+sender+" khusus admin")
       }
 
 // =========================
-// STICKER HD + TEXT
+// STICKER
 // =========================
 if (command === ".sticker") {
 
-  let imageBuffer = null
+  try {
+    let imageBuffer = null
+    const textSticker =
+      cmd.replace(".sticker", "").trim()
 
-  const textSticker =
-    cmd.replace(".sticker", "").trim()
+    // ======================
+    // MODE TEXT
+    // ======================
+    if (textSticker) {
 
-  // ======================
-  // MODE TEXT -> STICKER
-  // contoh:
-  // .sticker halo bang
-  // ======================
-  if (textSticker) {
+      const { createCanvas } =
+        require("canvas")
 
-    const width = 512
-    const height = 512
+      const canvas =
+        createCanvas(512, 512)
 
-    const canvas =
-      createCanvas(width, height)
+      const ctx =
+        canvas.getContext("2d")
 
-    const ctx =
-      canvas.getContext("2d")
+      ctx.fillStyle = "white"
+      ctx.fillRect(0, 0, 512, 512)
 
-    // background putih
-    ctx.fillStyle = "white"
-    ctx.fillRect(
-      0,
-      0,
-      width,
-      height
-    )
+      ctx.fillStyle = "black"
+      ctx.font = "bold 48px Arial"
+      ctx.textAlign = "center"
+      ctx.textBaseline = "middle"
 
-    // text hitam
-    ctx.fillStyle = "black"
-    ctx.font =
-      "bold 48px Arial"
-    ctx.textAlign = "center"
-    ctx.textBaseline = "middle"
-
-    // wrap text
-    function wrapText(
-      text,
-      x,
-      y,
-      maxWidth,
-      lineHeight
-    ) {
       const words =
-        text.split(" ")
+        textSticker.split(" ")
 
       let line = ""
       let lines = []
 
-      for (let n = 0; n < words.length; n++) {
-
-        const testLine =
-          line + words[n] + " "
-
-        const metrics =
-          ctx.measureText(
-            testLine
-          )
+      for (const word of words) {
+        const test =
+          line + word + " "
 
         if (
-          metrics.width > maxWidth &&
-          n > 0
+          ctx.measureText(test).width > 430
         ) {
           lines.push(line)
-          line =
-            words[n] + " "
+          line = word + " "
         } else {
-          line = testLine
+          line = test
         }
       }
 
       lines.push(line)
 
-      const startY =
-        y -
-        (
-          lines.length - 1
-        ) * lineHeight / 2
+      let y =
+        256 - (lines.length * 30)
 
-      lines.forEach(
-        (l, i) => {
-          ctx.fillText(
-            l.trim(),
-            x,
-            startY +
-            i * lineHeight
-          )
-        }
-      )
+      for (const l of lines) {
+        ctx.fillText(
+          l.trim(),
+          256,
+          y
+        )
+        y += 60
+      }
+
+      imageBuffer =
+        canvas.toBuffer("image/png")
     }
 
-    wrapText(
-      textSticker,
-      256,
-      256,
-      430,
-      60
-    )
+    // ======================
+    // gambar langsung
+    // ======================
+    else if (msg.message.imageMessage) {
+      imageBuffer =
+        await getBuffer(
+          msg.message.imageMessage,
+          "image"
+        )
+    }
 
-    imageBuffer =
-      canvas.toBuffer("image/png")
-  }
-
-  // ======================
-  // gambar langsung
-  // ======================
-  else if (
-    msg.message.imageMessage
-  ) {
-    imageBuffer =
-      await getBuffer(
-        msg.message.imageMessage,
-        "image"
-      )
-  }
-
-  // ======================
-  // reply gambar
-  // ======================
-  else if (
-    msg.message?.extendedTextMessage
+    // ======================
+    // reply gambar
+    // ======================
+    else if (
+      msg.message?.extendedTextMessage
       ?.contextInfo?.quotedMessage
       ?.imageMessage
-  ) {
+    ) {
 
-    const quoted =
-      msg.message
-      .extendedTextMessage
-      .contextInfo
-      .quotedMessage
-      .imageMessage
+      const quoted =
+        msg.message
+        .extendedTextMessage
+        .contextInfo
+        .quotedMessage
+        .imageMessage
 
-    imageBuffer =
-      await getBuffer(
-        quoted,
-        "image"
-      )
-  }
+      imageBuffer =
+        await getBuffer(
+          quoted,
+          "image"
+        )
+    }
 
-  if (!imageBuffer) {
-    return reply(
+    if (!imageBuffer) {
+      return reply(
 `Kirim:
 .sticker teks
 
 atau
 
 .sticker + gambar`
+      )
+    }
+
+    await sock.sendMessage(
+      from,
+      {
+        sticker: imageBuffer
+      },
+      {
+        quoted: msg
+      }
+    )
+
+  } catch (e) {
+    console.log(
+      "STICKER ERROR:",
+      e.message
+    )
+
+    return reply(
+      "❌ Gagal membuat sticker"
     )
   }
 
-  await sock.sendMessage(
-    from,
-    {
-      sticker: imageBuffer
-    },
-    {
-      quoted: msg
-    }
-  )
-
   return
 }
-
   // =====================
   // MODE IMAGE
   // =====================
