@@ -3,6 +3,10 @@ const qrcode = require("qrcode-terminal")
 const fs = require("fs")
 const express = require("express")
 const mongoose = require("mongoose")
+const {
+  Sticker,
+  StickerTypes
+} = require("wa-sticker-formatter")
 
 const {
   default: makeWASocket,
@@ -1277,7 +1281,7 @@ return reply("❌ @"+sender+" khusus admin")
       }
 
 // =========================
-// STICKER
+// STICKER HD
 // =========================
 if (command === ".sticker") {
 
@@ -1298,7 +1302,6 @@ if (command === ".sticker") {
       ?.contextInfo?.quotedMessage
       ?.imageMessage
   ) {
-
     const quoted =
       msg.message
       .extendedTextMessage
@@ -1323,10 +1326,22 @@ atau reply gambar lalu ketik:
     )
   }
 
+  const sticker =
+    new Sticker(imageBuffer, {
+      pack: "ZnoidFamz Bot",
+      author: "ZnoidFamz",
+      type: StickerTypes.FULL,
+      quality: 100,
+      background: "transparent"
+    })
+
+  const stickerBuffer =
+    await sticker.toBuffer()
+
   await sock.sendMessage(
     from,
     {
-      sticker: imageBuffer
+      sticker: stickerBuffer
     },
     {
       quoted: msg
