@@ -442,6 +442,7 @@ async function reply(text) {
             group: from
           })
       }
+      
 // =========================
 // ADMIN CHECK FIX LID
 // =========================
@@ -453,9 +454,6 @@ if (isGroup) {
   const meta =
     await sock.groupMetadata(from)
 
-  // =====================
-  // CEK USER
-  // =====================
   const senderIds = [
     normalize(msg.key.participant),
     normalize(sender)
@@ -472,23 +470,16 @@ if (isGroup) {
     member?.admin === "admin" ||
     member?.admin === "superadmin"
 
-  // =====================
-  // CEK BOT
-  // =====================
-  let bot = null
-
-  // cari berdasarkan nomor asli
-  bot =
+  let bot =
     meta.participants.find(p => {
+      const jid = p.jid || ""
 
-      const jid =
-        p.jid || ""
-
-      return normalize(jid) ===
+      return (
+        normalize(jid) ===
         normalize(sock.user.id)
+      )
     })
 
-  // fallback cari by id
   if (!bot) {
     bot =
       meta.participants.find(p =>
@@ -507,143 +498,7 @@ if (isGroup) {
   console.log("isAdmin:", isAdmin)
   console.log("botAdmin:", botAdmin)
 }
-
-  // =========================
-  // SEMUA ID USER
-  // =========================
-  const senderIds = []
-
-  if (msg.key.participant) {
-    senderIds.push(
-      normalize(msg.key.participant)
-    )
-  }
-
-  senderIds.push(
-    normalize(sender)
-  )
-
-  // =========================
-  // SEMUA ID BOT
-  // =========================
-  const botIds = []
-
-  // ID UTAMA
-  if (sock.user?.id) {
-
-    botIds.push(
-      normalize(sock.user.id)
-    )
-  }
-
-  // LID BARU
-  if (sock.user?.lid) {
-
-    botIds.push(
-      normalize(sock.user.lid)
-    )
-  }
-
-  // TAMBAHAN JAGA2
-  if (sock.user?.jid) {
-
-    botIds.push(
-      normalize(sock.user.jid)
-    )
-  }
-
-  // =========================
-  // DEBUG FULL
-  // =========================
-  console.log("===== BOT DEBUG =====")
-
-  console.log(
-    "sock.user.id:",
-    sock.user?.id
-  )
-
-  console.log(
-    "sock.user.lid:",
-    sock.user?.lid
-  )
-
-  console.log(
-    "BOT IDS:",
-    botIds
-  )
-
-  console.log(
-    "GROUP PARTICIPANTS:"
-  )
-
-  meta.participants.forEach((x) => {
-
-    console.log({
-      id: x.id,
-      admin: x.admin,
-      normalized: normalize(x.id)
-    })
-  })
-
-  // =========================
-  // MEMBER
-  // =========================
-  const member =
-    meta.participants.find(x => {
-
-      return senderIds.includes(
-        normalize(x.id)
-      )
-    })
-
-  // =========================
-  // BOT
-  // =========================
-  const bot =
-    meta.participants.find(x => {
-
-      const pid =
-        normalize(x.id)
-
-      return botIds.includes(pid)
-    })
-
-  // =========================
-  // CHECK ADMIN
-  // =========================
-  isAdmin =
-    member?.admin === "admin" ||
-    member?.admin === "superadmin"
-
-  botAdmin =
-    bot?.admin === "admin" ||
-    bot?.admin === "superadmin"
-
-  // =========================
-  // DEBUG FINAL
-  // =========================
-  console.log("===== FINAL CHECK =====")
-
-  console.log(
-    "MEMBER:",
-    member
-  )
-
-  console.log(
-    "BOT:",
-    bot
-  )
-
-  console.log(
-    "isAdmin:",
-    isAdmin
-  )
-
-  console.log(
-    "botAdmin:",
-    botAdmin
-  )
-}
+      
       // =========================
       // BLOCK BELUM LOGIN
       // =========================
