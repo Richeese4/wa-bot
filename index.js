@@ -1286,136 +1286,82 @@ return reply("❌ @"+sender+" khusus admin")
 // =========================
 if (command === ".sticker") {
 
-  try {
-    let imageBuffer = null
-    const textSticker =
-      cmd.replace(".sticker", "").trim()
+  let imageBuffer = null
+  const textSticker =
+    cmd.replace(".sticker", "").trim()
 
-    // ======================
-    // MODE TEXT
-    // ======================
-    if (textSticker) {
+  // text -> sticker
+  if (textSticker) {
 
-      const { createCanvas } =
-        require("canvas")
+    const canvas =
+      createCanvas(512, 512)
 
-      const canvas =
-        createCanvas(512, 512)
+    const ctx =
+      canvas.getContext("2d")
 
-      const ctx =
-        canvas.getContext("2d")
+    ctx.fillStyle = "white"
+    ctx.fillRect(0, 0, 512, 512)
 
-      ctx.fillStyle = "white"
-      ctx.fillRect(0, 0, 512, 512)
+    ctx.fillStyle = "black"
+    ctx.font = "bold 48px Arial"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
 
-      ctx.fillStyle = "black"
-      ctx.font = "bold 48px Arial"
-      ctx.textAlign = "center"
-      ctx.textBaseline = "middle"
+    ctx.fillText(
+      textSticker,
+      256,
+      256
+    )
 
-      const words =
-        textSticker.split(" ")
+    imageBuffer =
+      canvas.toBuffer("image/png")
+  }
 
-      let line = ""
-      let lines = []
+  // gambar langsung
+  else if (msg.message.imageMessage) {
+    imageBuffer =
+      await getBuffer(
+        msg.message.imageMessage,
+        "image"
+      )
+  }
 
-      for (const word of words) {
-        const test =
-          line + word + " "
-
-        if (
-          ctx.measureText(test).width > 430
-        ) {
-          lines.push(line)
-          line = word + " "
-        } else {
-          line = test
-        }
-      }
-
-      lines.push(line)
-
-      let y =
-        256 - (lines.length * 30)
-
-      for (const l of lines) {
-        ctx.fillText(
-          l.trim(),
-          256,
-          y
-        )
-        y += 60
-      }
-
-      imageBuffer =
-        canvas.toBuffer("image/png")
-    }
-
-    // ======================
-    // gambar langsung
-    // ======================
-    else if (msg.message.imageMessage) {
-      imageBuffer =
-        await getBuffer(
-          msg.message.imageMessage,
-          "image"
-        )
-    }
-
-    // ======================
-    // reply gambar
-    // ======================
-    else if (
-      msg.message?.extendedTextMessage
+  // reply gambar
+  else if (
+    msg.message?.extendedTextMessage
       ?.contextInfo?.quotedMessage
       ?.imageMessage
-    ) {
+  ) {
 
-      const quoted =
-        msg.message
+    const quoted =
+      msg.message
         .extendedTextMessage
         .contextInfo
         .quotedMessage
         .imageMessage
 
-      imageBuffer =
-        await getBuffer(
-          quoted,
-          "image"
-        )
-    }
-
-    if (!imageBuffer) {
-      return reply(
-`Kirim:
-.sticker teks
-
-atau
-
-.sticker + gambar`
+    imageBuffer =
+      await getBuffer(
+        quoted,
+        "image"
       )
-    }
+  }
 
-    await sock.sendMessage(
-      from,
-      {
-        sticker: imageBuffer
-      },
-      {
-        quoted: msg
-      }
-    )
-
-  } catch (e) {
-    console.log(
-      "STICKER ERROR:",
-      e.message
-    )
-
+  if (!imageBuffer) {
     return reply(
-      "❌ Gagal membuat sticker"
+      "Kirim .sticker + gambar atau text"
     )
   }
+
+  await sock.sendMessage(
+    from,
+    {
+      sticker: imageBuffer
+    },
+    {
+      quoted: msg
+    }
+  )
 
   return
 }
@@ -1607,7 +1553,7 @@ ${format(session.expired)}`
 if (command === ".panel") {
 
   if (currentRole !== "owner") {
-    return reply( "❌ Perintah ini khusus owner")
+    return reply(`❌ Perintah ini khusus owner`)
   }
 
   const users = await User.find()
