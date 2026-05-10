@@ -1045,7 +1045,8 @@ wa.me/${OWNER_NUMBER}`
 `📦 LIST SEWA BOT
 
 ⭐ USER
-5K = 7 Hari
+5K = 15 Hari
+7K = 20 Hari
 10K = 30 Hari
 
 👑 PREMIUM
