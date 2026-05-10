@@ -1,6 +1,7 @@
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
+const { createCanvas } = require("canvas")
 const express = require("express")
 const mongoose = require("mongoose")
 const {
@@ -1281,13 +1282,104 @@ return reply("❌ @"+sender+" khusus admin")
       }
 
 // =========================
-// STICKER HD
+// STICKER HD + TEXT
 // =========================
 if (command === ".sticker") {
 
+  const textSticker =
+    cmd.replace(".sticker", "").trim()
+
+  // =====================
+  // MODE TEXT
+  // =====================
+  if (textSticker) {
+
+    const canvas =
+      createCanvas(512, 512)
+
+    const ctx =
+      canvas.getContext("2d")
+
+    // background putih
+    ctx.fillStyle = "white"
+    ctx.fillRect(0, 0, 512, 512)
+
+    // text hitam
+    ctx.fillStyle = "black"
+    ctx.font = "bold 56px Arial"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+
+    // wrap text
+    const words =
+      textSticker.split(" ")
+
+    let lines = []
+    let line = ""
+
+    for (const word of words) {
+      const test =
+        line + word + " "
+
+      const width =
+        ctx.measureText(test).width
+
+      if (width > 420) {
+        lines.push(line)
+        line = word + " "
+      } else {
+        line = test
+      }
+    }
+
+    lines.push(line)
+
+    const lineHeight = 70
+    const startY =
+      256 -
+      ((lines.length - 1) * lineHeight) / 2
+
+    lines.forEach((l, i) => {
+      ctx.fillText(
+        l.trim(),
+        256,
+        startY + i * lineHeight
+      )
+    })
+
+    const buffer =
+      canvas.toBuffer()
+
+    const sticker =
+      new Sticker(buffer, {
+        pack: "ZnoidFamz Bot",
+        author: "ZnoidFamz",
+        type: StickerTypes.FULL,
+        quality: 100,
+        background: "white"
+      })
+
+    const stickerBuffer =
+      await sticker.toBuffer()
+
+    await sock.sendMessage(
+      from,
+      {
+        sticker: stickerBuffer
+      },
+      {
+        quoted: msg
+      }
+    )
+
+    return
+  }
+
+  // =====================
+  // MODE IMAGE
+  // =====================
   let imageBuffer = null
 
-  // gambar langsung
   if (msg.message.imageMessage) {
     imageBuffer =
       await getBuffer(
@@ -1296,7 +1388,6 @@ if (command === ".sticker") {
       )
   }
 
-  // reply gambar
   else if (
     msg.message?.extendedTextMessage
       ?.contextInfo?.quotedMessage
@@ -1318,10 +1409,10 @@ if (command === ".sticker") {
 
   if (!imageBuffer) {
     return reply(
-`Kirim gambar dengan caption:
-.sticker
+`Gunakan:
+.sticker teks
 
-atau reply gambar lalu ketik:
+atau kirim gambar:
 .sticker`
     )
   }
