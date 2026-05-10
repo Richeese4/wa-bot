@@ -66,10 +66,15 @@ const GroupSettings = mongoose.model("GroupSettings", new mongoose.Schema({
     default: false
   },
 
-  maxwarn: {
-    type: Number,
-    default: 3
-  },
+autokick: {
+  type: Boolean,
+  default: false
+},
+
+maxwarn: {
+  type: Number,
+  default: 3
+},
 
   filterchat: {
     type: [String],
@@ -704,7 +709,7 @@ wa.me/${OWNER_NUMBER}`
       }
 
 // =========================
-// ANTILINK FINAL PERFECT
+// ANTILINK FINAL
 // =========================
 if (
   settings.antilink &&
@@ -712,86 +717,88 @@ if (
   isLink(text)
 ) {
 
-  // ADMIN & OWNER BYPASS
+  // admin & owner bypass
   if (
     isAdmin ||
     sender.includes(OWNER_NUMBER)
   ) return
 
-  // BOT HARUS ADMIN
   if (!botAdmin) return
 
-  // JID ASLI
   const senderJid =
     msg.key.participant || from
 
-  // =========================
-  // INIT WARNS
-  // =========================
+  // =====================
+  // HAPUS PESAN LINK
+  // =====================
+  await sock.sendMessage(from, {
+    delete: msg.key
+  })
+
+  // =====================
+  // JIKA AUTOKICK OFF
+  // cuma hapus link
+  // =====================
+  if (!settings.autokick) {
+    return sock.sendMessage(from, {
+      text:
+`⚠️ Link terdeteksi
+
+Pesan berhasil dihapus`,
+      mentions: [senderJid]
+    })
+  }
+
+  // =====================
+  // WARNING MODE
+  // =====================
   if (!settings.warns) {
     settings.warns = {}
   }
 
-  // WARNING SEKARANG
   let currentWarn =
     Number(settings.warns[sender] || 0)
 
   const maxWarn =
     Number(settings.maxwarn || 3)
 
-  // TAMBAH WARNING
   currentWarn++
 
-  // JANGAN LEWAT BATAS
   if (currentWarn > maxWarn) {
     currentWarn = maxWarn
   }
 
-  // SAVE
   settings.warns[sender] =
     currentWarn
 
   settings.markModified("warns")
-
   await settings.save()
 
-  // =========================
-  // HAPUS PESAN
-  // =========================
-  await sock.sendMessage(from, {
-    delete: msg.key
-  })
-
-  // =========================
-  // SUDAH LIMIT
-  // =========================
+  // =====================
+  // LIMIT TERCAPAI
+  // =====================
   if (currentWarn >= maxWarn) {
 
-    // RESET DULU
     delete settings.warns[sender]
 
     settings.markModified("warns")
-
     await settings.save()
 
-    // PESAN
     await sock.sendMessage(from, {
       text:
 `⚠️ Warning ${maxWarn}/${maxWarn}
 
-🚫 @${sender.split("@")[0]}
-melewati batas warning
+🚫 @${sender}
+melewati batas
 
 Member akan dikeluarkan`,
       mentions: [senderJid]
     })
 
-    // DELAY
-    await new Promise(resolve =>
-      setTimeout(resolve, 1500)
+    await new Promise(r =>
+      setTimeout(r, 1500)
     )
 
-    // KICK
     await sock.groupParticipantsUpdate(
       from,
       [senderJid],
@@ -801,9 +808,6 @@ Member akan dikeluarkan`,
     return
   }
 
-  // =========================
-  // BELUM LIMIT
-  // =========================
   const left =
     maxWarn - currentWarn
 
@@ -817,6 +821,7 @@ Sisa warning: ${left}`,
     mentions: [senderJid]
   })
 }
+      
       // =========================
       // MENU
       // =========================
@@ -996,8 +1001,13 @@ if (command === ".antilink") {
     )
   }
 
-  settings.antilink =
-    value === "on"
+settings.antilink =
+  value === "on"
+
+if (value === "off") {
+  settings.warns = {}
+  settings.markModified("warns")
+}
 
   await settings.save()
 
@@ -1006,47 +1016,61 @@ if (command === ".antilink") {
   )
 }
 
-      // =========================
-      // AUTOKICK
-      // =========================
-      if (command === ".autokick") {
+// =========================
+// AUTOKICK
+// =========================
+if (command === ".autokick") {
 
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
+  // hanya premium & owner
+  if (
+    currentRole !== "premium" &&
+    currentRole !== "owner"
+  ) {
+    return reply("❌ Fitur khusus premium/owner")
+  }
 
-        if (!isAdmin) {
+  if (!isAdmin) {
+    return reply("❌ @" + sender + " khusus admin")
+  }
 
-return reply("❌ @"+sender+" khusus admin")
-        }
+  const arg =
+    cmd.split(" ")[1]?.toLowerCase()
 
-        const jumlah =
-          parseInt(
-            cmd.split(" ")[1]
-          )
+  // OFF
+if (arg === "off") {
+  settings.autokick = false
+  settings.warns = {}
+  settings.markModified("warns")
 
-        if (
-          !jumlah ||
-          jumlah < 1
-        ) {
+  await settings.save()
 
-         return reply(
-`.autokick 3`
-)
-        }
+  return reply(
+`❌ AutoKick OFF
 
-        settings.maxwarn =
-          jumlah
+⚠️ Semua warning direset`
+  )
+}
 
-        await settings.save()
+  const jumlah = parseInt(arg)
 
-        return reply(
-`✅ AutoKick:
-${jumlah} warning`
-)
-      }
+  if (!jumlah || jumlah < 1) {
+    return reply(
+`.autokick 3
+.autokick off`
+    )
+  }
 
+  settings.autokick = true
+  settings.maxwarn = jumlah
+
+  await settings.save()
+
+  return reply(
+`✅ AutoKick ON
+⚠️ Max warning: ${jumlah}`
+  )
+}
+      
       // =========================
       // FILTER CHAT
       // =========================
