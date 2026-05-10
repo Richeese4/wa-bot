@@ -746,7 +746,6 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       const userLimit = [
         ".menu",
-        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
