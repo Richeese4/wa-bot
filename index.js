@@ -1316,7 +1316,7 @@ if (textSticker) {
 
   // font lebih smooth
   let fontSize = 60
-  ctx.font = `bold ${fontSize}px Sans`
+  ctx.font = `bold ${fontSize}px Arial`
 
   // =====================
   // WORD WRAP DINAMIS
