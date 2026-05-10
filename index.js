@@ -405,8 +405,8 @@ async function reply(text) {
 
       const cmd = text.trim()
 
-     const command =
-  cmd.trim().split(/\s+/)[0].toLowerCase()
+      const command =
+        cmd.split(" ")[0].toLowerCase()
 
       console.log(
         "[MESSAGE]",
@@ -746,7 +746,6 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       const userLimit = [
         ".menu",
-        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
@@ -1045,8 +1044,7 @@ wa.me/${OWNER_NUMBER}`
 `📦 LIST SEWA BOT
 
 ⭐ USER
-5K = 15 Hari
-7K = 20 Hari
+5K = 7 Hari
 10K = 30 Hari
 
 👑 PREMIUM
@@ -1058,41 +1056,43 @@ wa.me/${OWNER_NUMBER}`
 )
       }
 
-// =========================
-// ANTILINK
-// =========================
+      // =========================
+      // ANTILINK
+      // =========================
 if (command === ".antilink") {
 
   if (!isGroup) {
     return reply("❌ Hanya bisa dipakai di group")
   }
 
-  // semua role boleh, asal admin group
   if (!isAdmin) {
-    return reply("❌ Hanya admin group")
+    return reply("❌ @" + sender + " khusus admin")
   }
+        const value =
+          cmd.split(" ")[1]
 
-  const value =
-    cmd.trim().split(/\s+/)[1]?.toLowerCase()
+        if (
+          !["on", "off"]
+          .includes(value)
+        ) {
 
-  if (!["on", "off"].includes(value)) {
-    return reply(
+         return reply(
 `PERINTAH SALAH ❌
 
 .antilink on
 .antilink off`
-    )
-  }
+)
+        }
 
-  settings.antilink =
-    value === "on"
+        settings.antilink =
+          value === "on"
 
-  await settings.save()
+        await settings.save()
 
-  return reply(
+        return reply(
 `✅ Antilink ${value}`
-  )
-}
+)
+      }
 
       // =========================
       // AUTOKICK
