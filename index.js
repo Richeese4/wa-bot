@@ -1397,7 +1397,7 @@ if (command === ".panel") {
 
   if (users.length < 1) {
     txt += "Tidak ada key"
-    return reply( text: txt )
+    return reply(txt)
   }
 
   for (const user of users) {
