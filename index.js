@@ -1,7 +1,6 @@
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
-const { createCanvas } = require("canvas")
 const express = require("express")
 const mongoose = require("mongoose")
 const {
@@ -1323,73 +1322,6 @@ if (command === ".sticker") {
 .sticker
 
 atau reply gambar lalu ketik:
-.sticker`
-    )
-  }
-
-  const sticker =
-    new Sticker(imageBuffer, {
-      pack: "ZnoidFamz Bot",
-      author: "ZnoidFamz",
-      type: StickerTypes.FULL,
-      quality: 100,
-      background: "transparent"
-    })
-
-  const stickerBuffer =
-    await sticker.toBuffer()
-
-  await sock.sendMessage(
-    from,
-    {
-      sticker: stickerBuffer
-    },
-    {
-      quoted: msg
-    }
-  )
-
-  return
-}
-
-  // =====================
-  // MODE IMAGE
-  // =====================
-  let imageBuffer = null
-
-  if (msg.message.imageMessage) {
-    imageBuffer =
-      await getBuffer(
-        msg.message.imageMessage,
-        "image"
-      )
-  }
-
-  else if (
-    msg.message?.extendedTextMessage
-      ?.contextInfo?.quotedMessage
-      ?.imageMessage
-  ) {
-    const quoted =
-      msg.message
-      .extendedTextMessage
-      .contextInfo
-      .quotedMessage
-      .imageMessage
-
-    imageBuffer =
-      await getBuffer(
-        quoted,
-        "image"
-      )
-  }
-
-  if (!imageBuffer) {
-    return reply(
-`Gunakan:
-.sticker teks
-
-atau kirim gambar:
 .sticker`
     )
   }
