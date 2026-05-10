@@ -8,7 +8,8 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  downloadContentFromMessage
 } = require("@whiskeysockets/baileys")
 
 // =========================
@@ -349,6 +350,25 @@ async function reply(text) {
       quoted: msg
     }
   )
+}
+
+      async function getBuffer(message, type) {
+  const stream =
+    await downloadContentFromMessage(
+      message,
+      type
+    )
+
+  let buffer = Buffer.from([])
+
+  for await (const chunk of stream) {
+    buffer = Buffer.concat([
+      buffer,
+      chunk
+    ])
+  }
+
+  return buffer
 }
 
       // =========================
@@ -1261,35 +1281,36 @@ return reply("❌ @"+sender+" khusus admin")
 // =========================
 if (command === ".sticker") {
 
-  let quoted =
-    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
-
   let imageBuffer = null
 
-  // jika gambar langsung dikirim dengan caption .sticker
+  // gambar langsung
   if (msg.message.imageMessage) {
-    const stream =
-      await sock.downloadMediaMessage(msg)
-
-    imageBuffer = Buffer.from(stream)
+    imageBuffer =
+      await getBuffer(
+        msg.message.imageMessage,
+        "image"
+      )
   }
 
-  // jika reply gambar lalu ketik .sticker
-  else if (quoted?.imageMessage) {
+  // reply gambar
+  else if (
+    msg.message?.extendedTextMessage
+      ?.contextInfo?.quotedMessage
+      ?.imageMessage
+  ) {
 
-    const qmsg = {
-      key: {
-        remoteJid: from,
-        id: msg.key.id,
-        participant: senderJid
-      },
-      message: quoted
-    }
+    const quoted =
+      msg.message
+      .extendedTextMessage
+      .contextInfo
+      .quotedMessage
+      .imageMessage
 
-    const stream =
-      await sock.downloadMediaMessage(qmsg)
-
-    imageBuffer = Buffer.from(stream)
+    imageBuffer =
+      await getBuffer(
+        quoted,
+        "image"
+      )
   }
 
   if (!imageBuffer) {
@@ -1297,7 +1318,7 @@ if (command === ".sticker") {
 `Kirim gambar dengan caption:
 .sticker
 
-atau reply gambar dengan:
+atau reply gambar lalu ketik:
 .sticker`
     )
   }
