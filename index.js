@@ -1286,94 +1286,170 @@ return reply("❌ @"+sender+" khusus admin")
 // =========================
 if (command === ".sticker") {
 
+  let imageBuffer = null
+
   const textSticker =
     cmd.replace(".sticker", "").trim()
 
-  // =====================
-  // MODE TEXT
-  // =====================
+  // ======================
+  // MODE TEXT -> STICKER
+  // contoh:
+  // .sticker halo bang
+  // ======================
   if (textSticker) {
 
+    const width = 512
+    const height = 512
+
     const canvas =
-      createCanvas(512, 512)
+      createCanvas(width, height)
 
     const ctx =
       canvas.getContext("2d")
 
     // background putih
     ctx.fillStyle = "white"
-    ctx.fillRect(0, 0, 512, 512)
+    ctx.fillRect(
+      0,
+      0,
+      width,
+      height
+    )
 
     // text hitam
     ctx.fillStyle = "black"
-    ctx.font = "bold 56px Arial"
+    ctx.font =
+      "bold 48px Arial"
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
 
     // wrap text
-    const words =
-      textSticker.split(" ")
+    function wrapText(
+      text,
+      x,
+      y,
+      maxWidth,
+      lineHeight
+    ) {
+      const words =
+        text.split(" ")
 
-    let lines = []
-    let line = ""
+      let line = ""
+      let lines = []
 
-    for (const word of words) {
-      const test =
-        line + word + " "
+      for (let n = 0; n < words.length; n++) {
 
-      const width =
-        ctx.measureText(test).width
+        const testLine =
+          line + words[n] + " "
 
-      if (width > 420) {
-        lines.push(line)
-        line = word + " "
-      } else {
-        line = test
+        const metrics =
+          ctx.measureText(
+            testLine
+          )
+
+        if (
+          metrics.width > maxWidth &&
+          n > 0
+        ) {
+          lines.push(line)
+          line =
+            words[n] + " "
+        } else {
+          line = testLine
+        }
       }
+
+      lines.push(line)
+
+      const startY =
+        y -
+        (
+          lines.length - 1
+        ) * lineHeight / 2
+
+      lines.forEach(
+        (l, i) => {
+          ctx.fillText(
+            l.trim(),
+            x,
+            startY +
+            i * lineHeight
+          )
+        }
+      )
     }
 
-    lines.push(line)
-
-    const lineHeight = 70
-    const startY =
-      256 -
-      ((lines.length - 1) * lineHeight) / 2
-
-    lines.forEach((l, i) => {
-      ctx.fillText(
-        l.trim(),
-        256,
-        startY + i * lineHeight
-      )
-    })
-
-    const buffer =
-      canvas.toBuffer()
-
-    const sticker =
-      new Sticker(buffer, {
-        pack: "ZnoidFamz Bot",
-        author: "ZnoidFamz",
-        type: StickerTypes.FULL,
-        quality: 100,
-        background: "white"
-      })
-
-    const stickerBuffer =
-      await sticker.toBuffer()
-
-    await sock.sendMessage(
-      from,
-      {
-        sticker: stickerBuffer
-      },
-      {
-        quoted: msg
-      }
+    wrapText(
+      textSticker,
+      256,
+      256,
+      430,
+      60
     )
 
-    return
+    imageBuffer =
+      canvas.toBuffer("image/png")
   }
+
+  // ======================
+  // gambar langsung
+  // ======================
+  else if (
+    msg.message.imageMessage
+  ) {
+    imageBuffer =
+      await getBuffer(
+        msg.message.imageMessage,
+        "image"
+      )
+  }
+
+  // ======================
+  // reply gambar
+  // ======================
+  else if (
+    msg.message?.extendedTextMessage
+      ?.contextInfo?.quotedMessage
+      ?.imageMessage
+  ) {
+
+    const quoted =
+      msg.message
+      .extendedTextMessage
+      .contextInfo
+      .quotedMessage
+      .imageMessage
+
+    imageBuffer =
+      await getBuffer(
+        quoted,
+        "image"
+      )
+  }
+
+  if (!imageBuffer) {
+    return reply(
+`Kirim:
+.sticker teks
+
+atau
+
+.sticker + gambar`
+    )
+  }
+
+  await sock.sendMessage(
+    from,
+    {
+      sticker: imageBuffer
+    },
+    {
+      quoted: msg
+    }
+  )
+
+  return
+}
 
   // =====================
   // MODE IMAGE
