@@ -1639,7 +1639,7 @@ ${format(session.expired)}`
 if (command === ".panel") {
 
   if (currentRole !== "owner") {
-    return reply( "❌ Perintah ini khusus owner")
+    return reply("❌ Perintah ini khusus owner")
   }
 
   const users = await User.find()
@@ -1654,19 +1654,15 @@ if (command === ".panel") {
 
   for (const user of users) {
 
-    // cari session berdasarkan key
-const userSessions =
-  sessions.filter(x => x.key === user.key)
+    const userSessions =
+      sessions.filter(x => x.key === user.key)
 
-const session =
-  userSessions[0]
+    const session = userSessions[0]
 
     let status = "🕒 Belum Redeem"
     let groupName = "-"
 
-    // ======================
-    // KEY EXPIRED
-    // ======================
+    // EXPIRED
     if (
       user.expired !== 9999999999999 &&
       Date.now() > user.expired
@@ -1674,24 +1670,19 @@ const session =
 
       status = "❌ Expired"
 
-      // hapus session lama otomatis
       await Session.deleteMany({
         key: user.key
       })
     }
 
-    // ======================
-    // KEY AKTIF
-    // ======================
+    // AKTIF
     else if (session) {
 
       status = "✅ Aktif"
 
       try {
         const meta =
-          await sock.groupMetadata(
-            session.group
-          )
+          await sock.groupMetadata(session.group)
 
         groupName =
           meta.subject || "Unknown Group"
@@ -1701,8 +1692,8 @@ const session =
       }
     }
 
-    txt +=
-`${status}
+    txt += `
+${status}
 
 🔑 ${user.key}
 👤 ${user.role}
@@ -1712,8 +1703,7 @@ const session =
 `
   }
 
-  return reply(
-)
+  return reply(txt)
 }
       
 // =========================
