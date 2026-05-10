@@ -1256,16 +1256,65 @@ return reply("❌ @"+sender+" khusus admin")
 )
       }
 
-      // =========================
-      // STICKER
-      // =========================
-      if (command === ".sticker") {
+// =========================
+// STICKER
+// =========================
+if (command === ".sticker") {
 
-        return reply(
-            "✅ Sticker system aktif"
-)
-      }
+  let quoted =
+    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
 
+  let imageBuffer = null
+
+  // jika gambar langsung dikirim dengan caption .sticker
+  if (msg.message.imageMessage) {
+    const stream =
+      await sock.downloadMediaMessage(msg)
+
+    imageBuffer = Buffer.from(stream)
+  }
+
+  // jika reply gambar lalu ketik .sticker
+  else if (quoted?.imageMessage) {
+
+    const qmsg = {
+      key: {
+        remoteJid: from,
+        id: msg.key.id,
+        participant: senderJid
+      },
+      message: quoted
+    }
+
+    const stream =
+      await sock.downloadMediaMessage(qmsg)
+
+    imageBuffer = Buffer.from(stream)
+  }
+
+  if (!imageBuffer) {
+    return reply(
+`Kirim gambar dengan caption:
+.sticker
+
+atau reply gambar dengan:
+.sticker`
+    )
+  }
+
+  await sock.sendMessage(
+    from,
+    {
+      sticker: imageBuffer
+    },
+    {
+      quoted: msg
+    }
+  )
+
+  return
+}
+      
       // =========================
       // MASA AKTIF
       // =========================
