@@ -182,27 +182,61 @@ const sock = makeWASocket({
   version,
   logger: P({ level: "silent" }),
   auth: state,
-  printQRInTerminal: false
+  printQRInTerminal: false,
+  syncFullHistory: false,
+  markOnlineOnConnect: true
 })
 
-sockGlobal = sock
+let sockGlobal = sock
 
 // 🔥 TARUH DI SINI
+let pairingInterval = null
+
+// =========================
+// AUTO PAIRING (ANTI SPAM)
+// =========================
 if (!sock.authState.creds.registered) {
 
-  setTimeout(async () => {
+  const sendPairing = async () => {
     try {
-      const code = await sock.requestPairingCode(PAIRING_NUMBER)
+      const code =
+        await sock.requestPairingCode(
+          PAIRING_NUMBER
+        )
 
-      console.log("PAIRING CODE:", code)
+      console.log(
+        "PAIRING CODE:",
+        code
+      )
 
     } catch (e) {
-      console.log(e.message)
+      console.log(
+        "PAIR ERROR:",
+        e.message
+      )
     }
-  }, 3000)
+  }
+
+  // kirim pertama kali
+  setTimeout(sendPairing, 3000)
+
+  // ulang tiap 60 detik
+  pairingInterval =
+    setInterval(
+      sendPairing,
+      60000
+    )
 }
 
   sock.ev.on("creds.update", saveCreds)
+  sock.ev.on(
+  "connection.update",
+  async ({ connection }) => {
+    if (connection === "open") {
+      await saveCreds()
+    }
+  }
+)
 
   // =========================
   // CONNECTION
@@ -219,23 +253,44 @@ if (!sock.authState.creds.registered) {
       })
     }
 
-    if (connection === "open") {
-      console.log("BOT ONLINE")
-    }
+if (connection === "open") {
+  console.log("BOT ONLINE")
 
-    if (connection === "close") {
+  if (pairingInterval) {
+    clearInterval(pairingInterval)
+    pairingInterval = null
+  }
+}
 
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !==
-        DisconnectReason.loggedOut
+if (connection === "close") {
 
-      console.log("RECONNECT:", shouldReconnect)
+  if (pairingInterval) {
+    clearInterval(pairingInterval)
+    pairingInterval = null
+  }
 
-      if (shouldReconnect) {
-        startBot()
-      }
-    }
-  })
+  const statusCode =
+    lastDisconnect?.error?.output?.statusCode
+
+  const shouldReconnect =
+    statusCode !== DisconnectReason.loggedOut
+
+  console.log(
+    "DISCONNECTED:",
+    statusCode
+  )
+
+  if (shouldReconnect) {
+    console.log("Reconnect 5 detik...")
+setTimeout(async () => {
+  try {
+    await sock.ws.close()
+  } catch {}
+
+  startBot()
+}, 5000)
+  }
+})
 
   // =========================
   // AUTO TOLAK TELPON
@@ -975,46 +1030,42 @@ wa.me/${OWNER_NUMBER}`
 )
       }
 
-// =========================
-// ANTILINK
-// =========================
-if (command === ".antilink") {
-
-  if (!isGroup) {
-    return reply("❌ Hanya bisa dipakai di group")
-  }
-
-  // semua role boleh, asal admin group
-  if (!isAdmin) {
-    return reply("❌ Hanya admin group")
-  }
-
-  const value =
-    cmd.trim().split(/\s+/)[1]?.toLowerCase()
-
-  if (!["on", "off"].includes(value)) {
-    return reply(
-`PERINTAH SALAH ❌
-
-.antilink on
-.antilink off`
-    )
-  }
-
-settings.antilink =
-  value === "on"
-
-if (value === "off") {
-  settings.warns = {}
-  settings.markModified("warns")
-}
-
-  await settings.save()
-
-  return reply(
-`✅ Antilink ${value}`
-  )
-}
+// ========================= 
+// ANTILINK 
+// ========================= 
+      if (command === ".antilink") {
+        
+        if (!isGroup) {
+          return reply("❌ Hanya bisa dipakai di group") 
+        } 
+        
+        // semua role boleh, asal admin group
+        if (!isAdmin) {
+        return reply("❌ Hanya admin group") 
+      } 
+      
+      const value = cmd.trim().split(/\s+/)[1]?.toLowerCase()
+        
+      if (!["on", "off"].includes(value)) {
+        return reply(`
+          PERINTAH SALAH ❌
+        
+        .antilink on 
+        .antilink off`
+        ) 
+      } settings.antilink = value === "on"
+        
+      if (value === "off") {
+        settings.warns = {}
+        settings.markModified("warns") 
+      }
+      
+      await settings.save()
+        
+      return reply(
+        `✅ Antilink ${value}` 
+      ) 
+    }
 
 // =========================
 // AUTOKICK
@@ -1045,7 +1096,7 @@ if (arg === "off") {
   await settings.save()
 
   return reply(
-`❌ AutoKick OFF
+`✅ AutoKick OFF
 
 ⚠️ Semua warning direset`
   )
