@@ -558,10 +558,10 @@ if (isGroup) {
         command !== ".login"
       ) {
 
-        return reply('❌ Admin group belum login
+        return reply(`❌ Admin group belum login
 
 Silahkan login:
-.login key')
+.login key`)
       }
 
       // =========================
