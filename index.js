@@ -124,11 +124,9 @@ function isLink(text) {
 // NORMALIZE ID
 // =========================
 function normalize(id = "") {
-
-  return id
-    .replace(/:\d+/g, "")
-    .replace(/@s\.whatsapp\.net/g, "")
-    .replace(/@lid/g, "")
+  return String(id)
+    .split("@")[0]
+    .split(":")[0]
     .replace(/[^0-9]/g, "")
     .trim()
 }
@@ -405,8 +403,8 @@ async function reply(text) {
 
       const cmd = text.trim()
 
-      const command =
-        cmd.split(" ")[0].toLowerCase()
+     const command =
+  cmd.trim().split(/\s+/)[0].toLowerCase()
 
       console.log(
         "[MESSAGE]",
@@ -452,6 +450,7 @@ if (isGroup) {
 
   const meta =
     await sock.groupMetadata(from)
+  console.log("BOT USER:", sock.user)
 
   // =========================
   // SEMUA ID USER
@@ -471,31 +470,16 @@ if (isGroup) {
   // =========================
   // SEMUA ID BOT
   // =========================
-  const botIds = []
+const botIds = [
+  normalize(sock.user?.id),
+  normalize(sock.user?.lid),
+  normalize(sock.user?.jid)
+].filter(Boolean)
 
-  // ID UTAMA
-  if (sock.user?.id) {
-
-    botIds.push(
-      normalize(sock.user.id)
-    )
-  }
-
-  // LID BARU
-  if (sock.user?.lid) {
-
-    botIds.push(
-      normalize(sock.user.lid)
-    )
-  }
-
-  // TAMBAHAN JAGA2
-  if (sock.user?.jid) {
-
-    botIds.push(
-      normalize(sock.user.jid)
-    )
-  }
+const bot =
+  meta.participants.find(p =>
+    botIds.includes(normalize(p.id))
+  )
 
   // =========================
   // DEBUG FULL
@@ -544,14 +528,10 @@ if (isGroup) {
   // =========================
   // BOT
   // =========================
-  const bot =
-    meta.participants.find(x => {
-
-      const pid =
-        normalize(x.id)
-
-      return botIds.includes(pid)
-    })
+const bot =
+  meta.participants.find(p =>
+    botIds.includes(normalize(p.id))
+  )
 
   // =========================
   // CHECK ADMIN
@@ -746,6 +726,7 @@ wa.me/${OWNER_NUMBER}`
       // =========================
       const userLimit = [
         ".menu",
+        ".antilink",
         ".linkgroup",
         ".sticker",
         ".masaaktif",
@@ -1044,7 +1025,8 @@ wa.me/${OWNER_NUMBER}`
 `📦 LIST SEWA BOT
 
 ⭐ USER
-5K = 7 Hari
+5K = 15 Hari
+7K = 20 Hari
 10K = 30 Hari
 
 👑 PREMIUM
@@ -1056,43 +1038,41 @@ wa.me/${OWNER_NUMBER}`
 )
       }
 
-      // =========================
-      // ANTILINK
-      // =========================
+// =========================
+// ANTILINK
+// =========================
 if (command === ".antilink") {
 
   if (!isGroup) {
     return reply("❌ Hanya bisa dipakai di group")
   }
 
+  // semua role boleh, asal admin group
   if (!isAdmin) {
-    return reply("❌ @" + sender + " khusus admin")
+    return reply("❌ Hanya admin group")
   }
-        const value =
-          cmd.split(" ")[1]
 
-        if (
-          !["on", "off"]
-          .includes(value)
-        ) {
+  const value =
+    cmd.trim().split(/\s+/)[1]?.toLowerCase()
 
-         return reply(
+  if (!["on", "off"].includes(value)) {
+    return reply(
 `PERINTAH SALAH ❌
 
 .antilink on
 .antilink off`
-)
-        }
+    )
+  }
 
-        settings.antilink =
-          value === "on"
+  settings.antilink =
+    value === "on"
 
-        await settings.save()
+  await settings.save()
 
-        return reply(
+  return reply(
 `✅ Antilink ${value}`
-)
-      }
+  )
+}
 
       // =========================
       // AUTOKICK
