@@ -1286,170 +1286,94 @@ return reply("❌ @"+sender+" khusus admin")
 // =========================
 if (command === ".sticker") {
 
-  let imageBuffer = null
-
   const textSticker =
     cmd.replace(".sticker", "").trim()
 
-  // ======================
-  // MODE TEXT -> STICKER
-  // contoh:
-  // .sticker halo bang
-  // ======================
+  // =====================
+  // MODE TEXT
+  // =====================
   if (textSticker) {
 
-    const width = 512
-    const height = 512
-
     const canvas =
-      createCanvas(width, height)
+      createCanvas(512, 512)
 
     const ctx =
       canvas.getContext("2d")
 
     // background putih
     ctx.fillStyle = "white"
-    ctx.fillRect(
-      0,
-      0,
-      width,
-      height
-    )
+    ctx.fillRect(0, 0, 512, 512)
 
     // text hitam
     ctx.fillStyle = "black"
-    ctx.font =
-      "bold 48px Arial"
+    ctx.font = "bold 56px Arial"
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
 
     // wrap text
-    function wrapText(
-      text,
-      x,
-      y,
-      maxWidth,
-      lineHeight
-    ) {
-      const words =
-        text.split(" ")
+    const words =
+      textSticker.split(" ")
 
-      let line = ""
-      let lines = []
+    let lines = []
+    let line = ""
 
-      for (let n = 0; n < words.length; n++) {
+    for (const word of words) {
+      const test =
+        line + word + " "
 
-        const testLine =
-          line + words[n] + " "
+      const width =
+        ctx.measureText(test).width
 
-        const metrics =
-          ctx.measureText(
-            testLine
-          )
-
-        if (
-          metrics.width > maxWidth &&
-          n > 0
-        ) {
-          lines.push(line)
-          line =
-            words[n] + " "
-        } else {
-          line = testLine
-        }
+      if (width > 420) {
+        lines.push(line)
+        line = word + " "
+      } else {
+        line = test
       }
-
-      lines.push(line)
-
-      const startY =
-        y -
-        (
-          lines.length - 1
-        ) * lineHeight / 2
-
-      lines.forEach(
-        (l, i) => {
-          ctx.fillText(
-            l.trim(),
-            x,
-            startY +
-            i * lineHeight
-          )
-        }
-      )
     }
 
-    wrapText(
-      textSticker,
-      256,
-      256,
-      430,
-      60
+    lines.push(line)
+
+    const lineHeight = 70
+    const startY =
+      256 -
+      ((lines.length - 1) * lineHeight) / 2
+
+    lines.forEach((l, i) => {
+      ctx.fillText(
+        l.trim(),
+        256,
+        startY + i * lineHeight
+      )
+    })
+
+    const buffer =
+      canvas.toBuffer()
+
+    const sticker =
+      new Sticker(buffer, {
+        pack: "ZnoidFamz Bot",
+        author: "ZnoidFamz",
+        type: StickerTypes.FULL,
+        quality: 100,
+        background: "white"
+      })
+
+    const stickerBuffer =
+      await sticker.toBuffer()
+
+    await sock.sendMessage(
+      from,
+      {
+        sticker: stickerBuffer
+      },
+      {
+        quoted: msg
+      }
     )
 
-    imageBuffer =
-      canvas.toBuffer("image/png")
+    return
   }
-
-  // ======================
-  // gambar langsung
-  // ======================
-  else if (
-    msg.message.imageMessage
-  ) {
-    imageBuffer =
-      await getBuffer(
-        msg.message.imageMessage,
-        "image"
-      )
-  }
-
-  // ======================
-  // reply gambar
-  // ======================
-  else if (
-    msg.message?.extendedTextMessage
-      ?.contextInfo?.quotedMessage
-      ?.imageMessage
-  ) {
-
-    const quoted =
-      msg.message
-      .extendedTextMessage
-      .contextInfo
-      .quotedMessage
-      .imageMessage
-
-    imageBuffer =
-      await getBuffer(
-        quoted,
-        "image"
-      )
-  }
-
-  if (!imageBuffer) {
-    return reply(
-`Kirim:
-.sticker teks
-
-atau
-
-.sticker + gambar`
-    )
-  }
-
-  await sock.sendMessage(
-    from,
-    {
-      sticker: imageBuffer
-    },
-    {
-      quoted: msg
-    }
-  )
-
-  return
-}
 
   // =====================
   // MODE IMAGE
@@ -1639,7 +1563,7 @@ ${format(session.expired)}`
 if (command === ".panel") {
 
   if (currentRole !== "owner") {
-    return reply("❌ Perintah ini khusus owner")
+    return reply( "❌ Perintah ini khusus owner")
   }
 
   const users = await User.find()
@@ -1654,15 +1578,19 @@ if (command === ".panel") {
 
   for (const user of users) {
 
-    const userSessions =
-      sessions.filter(x => x.key === user.key)
+    // cari session berdasarkan key
+const userSessions =
+  sessions.filter(x => x.key === user.key)
 
-    const session = userSessions[0]
+const session =
+  userSessions[0]
 
     let status = "🕒 Belum Redeem"
     let groupName = "-"
 
-    // EXPIRED
+    // ======================
+    // KEY EXPIRED
+    // ======================
     if (
       user.expired !== 9999999999999 &&
       Date.now() > user.expired
@@ -1670,19 +1598,24 @@ if (command === ".panel") {
 
       status = "❌ Expired"
 
+      // hapus session lama otomatis
       await Session.deleteMany({
         key: user.key
       })
     }
 
-    // AKTIF
+    // ======================
+    // KEY AKTIF
+    // ======================
     else if (session) {
 
       status = "✅ Aktif"
 
       try {
         const meta =
-          await sock.groupMetadata(session.group)
+          await sock.groupMetadata(
+            session.group
+          )
 
         groupName =
           meta.subject || "Unknown Group"
@@ -1692,8 +1625,8 @@ if (command === ".panel") {
       }
     }
 
-    txt += `
-${status}
+    txt +=
+`${status}
 
 🔑 ${user.key}
 👤 ${user.role}
@@ -1703,7 +1636,8 @@ ${status}
 `
   }
 
-  return reply(txt)
+  return reply(
+)
 }
       
 // =========================
