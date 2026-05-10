@@ -1122,75 +1122,86 @@ ${word}`
         }
       }
 
-      // =========================
-      // KICK
-      // =========================
-      if (command === ".kick") {
+// =========================
+// KICK FIX ALL
+// =========================
+if (command === ".kick") {
 
-        if (
-          currentRole !== "premium" &&
-          currentRole !== "owner"
-        ) return
+  if (
+    currentRole !== "premium" &&
+    currentRole !== "owner" &&
+    currentRole !== "user"
+  ) return
 
-        if (!isAdmin) {
+  if (!isAdmin) {
+    return reply("❌ @" + sender + " khusus admin")
+  }
 
-return reply("❌ @"+sender+" khusus admin")
-        }
+  if (!botAdmin) {
+    return reply("❌ Bot bukan admin")
+  }
 
-        if (!botAdmin) {
+  let target = null
 
-          return reply(
-              "❌ Bot bukan admin"
-)
-        }
+  // =====================
+  // MODE REPLY
+  // =====================
+  const quoted =
+    msg.message?.extendedTextMessage
+      ?.contextInfo
 
-        let target
+  if (quoted?.participant) {
+    target = quoted.participant
+  }
 
-        // reply
-        if (
-          msg.message
-          .extendedTextMessage
-          ?.contextInfo
-          ?.participant
-        ) {
+  else if (quoted?.quotedParticipant) {
+    target = quoted.quotedParticipant
+  }
 
-          target =
-            msg.message
-            .extendedTextMessage
-            .contextInfo
-            .participant
-        }
+  // =====================
+  // MODE TAG
+  // =====================
+  else if (
+    msg.message?.extendedTextMessage
+      ?.contextInfo?.mentionedJid?.length
+  ) {
+    target =
+      msg.message
+      .extendedTextMessage
+      .contextInfo
+      .mentionedJid[0]
+  }
 
-        // nomor
-        else {
+  // =====================
+  // MODE NOMOR
+  // =====================
+  else {
 
-          const nomor =
-            cmd.split(" ")[1]
+    const nomor =
+      cmd.split(" ")[1]
 
-          if (!nomor) {
+    if (!nomor) {
+      return reply(
+`.kick reply/tag/628xxxx`
+      )
+    }
 
-            return reply(
-`.kick 628xxxx`
-)
-          }
+    target =
+      nomor.replace(/[^0-9]/g, "") +
+      "@s.whatsapp.net"
+  }
 
-          target =
-            nomor
-            .replace(/[^0-9]/g, "") +
-            "@s.whatsapp.net"
-        }
+  console.log("TARGET KICK:", target)
 
-        await sock.groupParticipantsUpdate(
-          from,
-          [target],
-          "remove"
-        )
+  await sock.groupParticipantsUpdate(
+    from,
+    [target],
+    "remove"
+  )
 
-        return reply(
-            "✅ Berhasil kick member"
-)
-      }
-
+  return reply("✅ Berhasil kick member")
+}
+      
       // =========================
       // LINK GROUP
       // =========================
