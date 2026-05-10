@@ -329,7 +329,8 @@ async function startBot() {
       // =========================
       // SENDER
       // =========================
- const sender =
+
+      const sender =
   normalize(
     msg.key.participant || from
   )
