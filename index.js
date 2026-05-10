@@ -443,7 +443,7 @@ async function reply(text) {
           })
       }
 // =========================
-// ADMIN CHECK ULTRA FIX
+// ADMIN CHECK FIX LID
 // =========================
 let isAdmin = false
 let botAdmin = false
@@ -452,6 +452,61 @@ if (isGroup) {
 
   const meta =
     await sock.groupMetadata(from)
+
+  // =====================
+  // CEK USER
+  // =====================
+  const senderIds = [
+    normalize(msg.key.participant),
+    normalize(sender)
+  ].filter(Boolean)
+
+  const member =
+    meta.participants.find(p =>
+      senderIds.includes(
+        normalize(p.id)
+      )
+    )
+
+  isAdmin =
+    member?.admin === "admin" ||
+    member?.admin === "superadmin"
+
+  // =====================
+  // CEK BOT
+  // =====================
+  let bot = null
+
+  // cari berdasarkan nomor asli
+  bot =
+    meta.participants.find(p => {
+
+      const jid =
+        p.jid || ""
+
+      return normalize(jid) ===
+        normalize(sock.user.id)
+    })
+
+  // fallback cari by id
+  if (!bot) {
+    bot =
+      meta.participants.find(p =>
+        normalize(p.id) ===
+        normalize(sock.user.id)
+      )
+  }
+
+  botAdmin =
+    bot?.admin === "admin" ||
+    bot?.admin === "superadmin"
+
+  console.log("===== FINAL CHECK =====")
+  console.log("MEMBER:", member)
+  console.log("BOT:", bot)
+  console.log("isAdmin:", isAdmin)
+  console.log("botAdmin:", botAdmin)
+}
 
   // =========================
   // SEMUA ID USER
