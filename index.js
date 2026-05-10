@@ -136,6 +136,7 @@ function normalize(id = "") {
 // =========================
 // START BOT
 // =========================
+const PAIRING_NUMBER = "6282218125138"
 async function cleanExpired() {
 
   const expired =
@@ -172,14 +173,29 @@ async function startBot() {
   const { version } =
     await fetchLatestBaileysVersion()
 
-  const sock = makeWASocket({
-    version,
-    logger: P({
-      level: "silent"
-    }),
-    auth: state,
-    printQRInTerminal: false
-  })
+const sock = makeWASocket({
+  version,
+  logger: P({ level: "silent" }),
+  auth: state,
+  printQRInTerminal: false
+})
+
+sockGlobal = sock
+
+// 🔥 TARUH DI SINI
+if (!sock.authState.creds.registered) {
+
+  setTimeout(async () => {
+    try {
+      const code = await sock.requestPairingCode(PAIRING_NUMBER)
+
+      console.log("PAIRING CODE:", code)
+
+    } catch (e) {
+      console.log(e.message)
+    }
+  }, 3000)
+}
 
   sock.ev.on("creds.update", saveCreds)
 
