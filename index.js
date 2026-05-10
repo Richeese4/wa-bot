@@ -623,20 +623,56 @@ Silahkan login:
         }
 
         // USER LOGIN
-        const data =
-          await User.findOne({
-            key: inputKey
-              .trim()
-              .toUpperCase()
-          })
+ // USER LOGIN
+const data =
+  await User.findOne({
+    key: inputKey
+      .trim()
+      .toUpperCase()
+  })
 
-        if (
-          !data ||
-          Date.now() > data.expired
-        ) {
+if (
+  !data ||
+  Date.now() > data.expired
+) {
+  return reply("@"+sender+" ❌ Key invalid / expired")
+}
 
-          return reply("@"+sender+"❌ Key invalid / expired")
-        }
+// =========================
+// CEK KEY SUDAH TERPAKAI
+// =========================
+const usedSession =
+  await Session.findOne({
+    key: data.key
+  })
+
+if (
+  usedSession &&
+  usedSession.group !== from
+) {
+  let groupName = "Group lain"
+
+  try {
+    const meta =
+      await sock.groupMetadata(
+        usedSession.group
+      )
+
+    groupName =
+      meta.subject
+  } catch {}
+
+  return reply(
+`❌ KEY SUDAH TERPAKAI
+
+🔑 ${data.key}
+
+Sudah aktif di:
+${groupName}
+
+KEY HANYA BISA 1X PAKAI`
+  )
+}
 
         await Session.findOneAndUpdate(
           { group: from },
