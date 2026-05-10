@@ -1282,101 +1282,74 @@ return reply("❌ @"+sender+" khusus admin")
       }
 
 // =========================
-// STICKER HD + TEXT
+// STICKER HD
 // =========================
 if (command === ".sticker") {
 
-  const textSticker =
-    cmd.replace(".sticker", "").trim()
+  let imageBuffer = null
 
-// MODE TEXT (IMPROVED)
-// =====================
-if (textSticker) {
-
-  const canvas = createCanvas(512, 512)
-  const ctx = canvas.getContext("2d")
-
-  // =====================
-  // BACKGROUND (lebih soft, bukan flat putih)
-  // =====================
-  ctx.fillStyle = "#ffffff"
-  ctx.fillRect(0, 0, 512, 512)
-
-  // optional border biar estetik
-  ctx.strokeStyle = "#e0e0e0"
-  ctx.lineWidth = 10
-  ctx.strokeRect(10, 10, 492, 492)
-
-  // =====================
-  // TEXT STYLE (biar nggak kotak)
-  // =====================
-  ctx.fillStyle = "#111111"
-  ctx.textAlign = "center"
-  ctx.textBaseline = "middle"
-
-  // font lebih smooth
-  let fontSize = 60
-  ctx.font = `bold ${fontSize}px Arial`
-
-  // =====================
-  // WORD WRAP DINAMIS
-  // =====================
-  const words = textSticker.split(" ")
-  let lines = []
-  let line = ""
-
-  for (const word of words) {
-    const test = line + word + " "
-    const width = ctx.measureText(test).width
-
-    if (width > 440) {
-      lines.push(line)
-      line = word + " "
-    } else {
-      line = test
-    }
+  // gambar langsung
+  if (msg.message.imageMessage) {
+    imageBuffer =
+      await getBuffer(
+        msg.message.imageMessage,
+        "image"
+      )
   }
-  lines.push(line)
 
-  // =====================
-  // AUTO CENTER VERTICAL
-  // =====================
-  const lineHeight = fontSize + 15
-  const startY = 256 - ((lines.length - 1) * lineHeight) / 2
+  // reply gambar
+  else if (
+    msg.message?.extendedTextMessage
+      ?.contextInfo?.quotedMessage
+      ?.imageMessage
+  ) {
+    const quoted =
+      msg.message
+      .extendedTextMessage
+      .contextInfo
+      .quotedMessage
+      .imageMessage
 
-  // =====================
-  // TEXT SHADOW (biar smooth, tidak kotak)
-  // =====================
-  ctx.shadowColor = "rgba(0,0,0,0.15)"
-  ctx.shadowBlur = 6
-  ctx.shadowOffsetX = 2
-  ctx.shadowOffsetY = 2
+    imageBuffer =
+      await getBuffer(
+        quoted,
+        "image"
+      )
+  }
 
-  lines.forEach((l, i) => {
-    ctx.fillText(
-      l.trim(),
-      256,
-      startY + i * lineHeight
+  if (!imageBuffer) {
+    return reply(
+`Kirim gambar dengan caption:
+.sticker
+
+atau reply gambar lalu ketik:
+.sticker`
     )
-  })
+  }
 
-  const buffer = canvas.toBuffer()
+  const sticker =
+    new Sticker(imageBuffer, {
+      pack: "ZnoidFamz Bot",
+      author: "ZnoidFamz",
+      type: StickerTypes.FULL,
+      quality: 100,
+      background: "transparent"
+    })
 
-  const sticker = new Sticker(buffer, {
-    pack: "By ZnoidFamz 082162625200",
-    author: "ZnoidFamz",
-    type: StickerTypes.FULL,
-    quality: 100,
-    background: "transparent"
-  })
+  const stickerBuffer =
+    await sticker.toBuffer()
 
-  const stickerBuffer = await sticker.toBuffer()
+  await sock.sendMessage(
+    from,
+    {
+      sticker: stickerBuffer
+    },
+    {
+      quoted: msg
+    }
+  )
 
-  return sock.sendMessage(from, {
-    sticker: stickerBuffer
-  }, {
-    quoted: msg
-  })
+  return
 }
 
   // =====================
