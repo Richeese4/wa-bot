@@ -1289,91 +1289,95 @@ if (command === ".sticker") {
   const textSticker =
     cmd.replace(".sticker", "").trim()
 
+// MODE TEXT (IMPROVED)
+// =====================
+if (textSticker) {
+
+  const canvas = createCanvas(512, 512)
+  const ctx = canvas.getContext("2d")
+
   // =====================
-  // MODE TEXT
+  // BACKGROUND (lebih soft, bukan flat putih)
   // =====================
-  if (textSticker) {
+  ctx.fillStyle = "#ffffff"
+  ctx.fillRect(0, 0, 512, 512)
 
-    const canvas =
-      createCanvas(512, 512)
+  // optional border biar estetik
+  ctx.strokeStyle = "#e0e0e0"
+  ctx.lineWidth = 10
+  ctx.strokeRect(10, 10, 492, 492)
 
-    const ctx =
-      canvas.getContext("2d")
+  // =====================
+  // TEXT STYLE (biar nggak kotak)
+  // =====================
+  ctx.fillStyle = "#111111"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
 
-    // background putih
-    ctx.fillStyle = "white"
-    ctx.fillRect(0, 0, 512, 512)
+  // font lebih smooth
+  let fontSize = 60
+  ctx.font = `bold ${fontSize}px Sans`
 
-    // text hitam
-    ctx.fillStyle = "black"
-    ctx.font = "bold 56px Arial"
-    ctx.textAlign = "center"
-    ctx.textBaseline = "middle"
+  // =====================
+  // WORD WRAP DINAMIS
+  // =====================
+  const words = textSticker.split(" ")
+  let lines = []
+  let line = ""
 
-    // wrap text
-    const words =
-      textSticker.split(" ")
+  for (const word of words) {
+    const test = line + word + " "
+    const width = ctx.measureText(test).width
 
-    let lines = []
-    let line = ""
-
-    for (const word of words) {
-      const test =
-        line + word + " "
-
-      const width =
-        ctx.measureText(test).width
-
-      if (width > 420) {
-        lines.push(line)
-        line = word + " "
-      } else {
-        line = test
-      }
+    if (width > 440) {
+      lines.push(line)
+      line = word + " "
+    } else {
+      line = test
     }
-
-    lines.push(line)
-
-    const lineHeight = 70
-    const startY =
-      256 -
-      ((lines.length - 1) * lineHeight) / 2
-
-    lines.forEach((l, i) => {
-      ctx.fillText(
-        l.trim(),
-        256,
-        startY + i * lineHeight
-      )
-    })
-
-    const buffer =
-      canvas.toBuffer()
-
-    const sticker =
-      new Sticker(buffer, {
-        pack: "ZnoidFamz Bot",
-        author: "ZnoidFamz",
-        type: StickerTypes.FULL,
-        quality: 100,
-        background: "white"
-      })
-
-    const stickerBuffer =
-      await sticker.toBuffer()
-
-    await sock.sendMessage(
-      from,
-      {
-        sticker: stickerBuffer
-      },
-      {
-        quoted: msg
-      }
-    )
-
-    return
   }
+  lines.push(line)
+
+  // =====================
+  // AUTO CENTER VERTICAL
+  // =====================
+  const lineHeight = fontSize + 15
+  const startY = 256 - ((lines.length - 1) * lineHeight) / 2
+
+  // =====================
+  // TEXT SHADOW (biar smooth, tidak kotak)
+  // =====================
+  ctx.shadowColor = "rgba(0,0,0,0.15)"
+  ctx.shadowBlur = 6
+  ctx.shadowOffsetX = 2
+  ctx.shadowOffsetY = 2
+
+  lines.forEach((l, i) => {
+    ctx.fillText(
+      l.trim(),
+      256,
+      startY + i * lineHeight
+    )
+  })
+
+  const buffer = canvas.toBuffer()
+
+  const sticker = new Sticker(buffer, {
+    pack: "By ZnoidFamz 082162625200",
+    author: "ZnoidFamz",
+    type: StickerTypes.FULL,
+    quality: 100,
+    background: "transparent"
+  })
+
+  const stickerBuffer = await sticker.toBuffer()
+
+  return sock.sendMessage(from, {
+    sticker: stickerBuffer
+  }, {
+    quoted: msg
+  })
+}
 
   // =====================
   // MODE IMAGE
