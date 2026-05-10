@@ -124,9 +124,11 @@ function isLink(text) {
 // NORMALIZE ID
 // =========================
 function normalize(id = "") {
-  return String(id)
-    .split("@")[0]
-    .split(":")[0]
+
+  return id
+    .replace(/:\d+/g, "")
+    .replace(/@s\.whatsapp\.net/g, "")
+    .replace(/@lid/g, "")
     .replace(/[^0-9]/g, "")
     .trim()
 }
@@ -450,7 +452,6 @@ if (isGroup) {
 
   const meta =
     await sock.groupMetadata(from)
-  console.log("BOT USER:", sock.user)
 
   // =========================
   // SEMUA ID USER
@@ -470,16 +471,31 @@ if (isGroup) {
   // =========================
   // SEMUA ID BOT
   // =========================
-const botIds = [
-  normalize(sock.user?.id),
-  normalize(sock.user?.lid),
-  normalize(sock.user?.jid)
-].filter(Boolean)
+  const botIds = []
 
-const bot =
-  meta.participants.find(p =>
-    botIds.includes(normalize(p.id))
-  )
+  // ID UTAMA
+  if (sock.user?.id) {
+
+    botIds.push(
+      normalize(sock.user.id)
+    )
+  }
+
+  // LID BARU
+  if (sock.user?.lid) {
+
+    botIds.push(
+      normalize(sock.user.lid)
+    )
+  }
+
+  // TAMBAHAN JAGA2
+  if (sock.user?.jid) {
+
+    botIds.push(
+      normalize(sock.user.jid)
+    )
+  }
 
   // =========================
   // DEBUG FULL
@@ -528,10 +544,14 @@ const bot =
   // =========================
   // BOT
   // =========================
-const bot =
-  meta.participants.find(p =>
-    botIds.includes(normalize(p.id))
-  )
+  const bot =
+    meta.participants.find(x => {
+
+      const pid =
+        normalize(x.id)
+
+      return botIds.includes(pid)
+    })
 
   // =========================
   // CHECK ADMIN
