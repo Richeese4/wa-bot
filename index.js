@@ -190,9 +190,6 @@ const sock = makeWASocket({
 
 let sockGlobal = sock
 
-// 🔥 TARUH DI SINI
-let pairingInterval = null
-
 // =========================
 // AUTO PAIRING (FIX)
 // =========================
@@ -221,18 +218,6 @@ if (!sock.authState.creds.registered) {
 
 sock.ev.on("creds.update", saveCreds)
 
-sock.ev.on(
-  "connection.update",
-  async ({ connection }) => {
-
-    if (connection === "open") {
-      console.log("BOT ONLINE")
-      await saveCreds()
-    }
-
-  }
-)
-
   // =========================
   // CONNECTION
   // =========================
@@ -251,33 +236,25 @@ sock.ev.on("connection.update", async ({
   if (connection === "open") {
     console.log("BOT ONLINE")
     await saveCreds()
-
-    if (pairingInterval) {
-      clearInterval(pairingInterval)
-      pairingInterval = null
-    }
   }
 
   if (connection === "close") {
 
-    if (pairingInterval) {
-      clearInterval(pairingInterval)
-      pairingInterval = null
-    }
-
     const statusCode =
       lastDisconnect?.error?.output?.statusCode
-
-    const shouldReconnect =
-      statusCode !== DisconnectReason.loggedOut
 
     console.log(
       "DISCONNECTED:",
       statusCode
     )
 
-    if (shouldReconnect) {
-      console.log("Reconnect 5 detik...")
+    if (
+      statusCode !==
+      DisconnectReason.loggedOut
+    ) {
+      console.log(
+        "Reconnect 5 detik..."
+      )
 
       setTimeout(() => {
         startBot()
