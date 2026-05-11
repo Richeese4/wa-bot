@@ -184,7 +184,8 @@ const sock = makeWASocket({
   auth: state,
   printQRInTerminal: false,
   syncFullHistory: false,
-  markOnlineOnConnect: true
+  markOnlineOnConnect: false,
+  browser: ["Ubuntu", "Chrome", "20.0.04"]
 })
 
 let sockGlobal = sock
@@ -193,11 +194,11 @@ let sockGlobal = sock
 let pairingInterval = null
 
 // =========================
-// AUTO PAIRING (ANTI SPAM)
+// AUTO PAIRING (FIX)
 // =========================
 if (!sock.authState.creds.registered) {
 
-  const sendPairing = async () => {
+  setTimeout(async () => {
     try {
       const code =
         await sock.requestPairingCode(
@@ -215,26 +216,20 @@ if (!sock.authState.creds.registered) {
         e.message
       )
     }
-  }
-
-  // kirim pertama kali
-  setTimeout(sendPairing, 3000)
-
-  // ulang tiap 60 detik
-  pairingInterval =
-    setInterval(
-      sendPairing,
-      60000
-    )
+  }, 5000)
 }
 
-  sock.ev.on("creds.update", saveCreds)
-  sock.ev.on(
+sock.ev.on("creds.update", saveCreds)
+
+sock.ev.on(
   "connection.update",
   async ({ connection }) => {
+
     if (connection === "open") {
+      console.log("BOT ONLINE")
       await saveCreds()
     }
+
   }
 )
 
