@@ -177,11 +177,13 @@ async function startBot() {
   const { version } =
     await fetchLatestBaileysVersion()
 
+const PAIRING_NUMBER = "6285285738987"
+
 const sock = makeWASocket({
   version,
   logger: P({ level: "silent" }),
   auth: state,
-  browser: ["Ubuntu", "Chrome", "20.0"],
+  browser: ["Windows", "Chrome", "120.0.0.0"],
   printQRInTerminal: false,
   markOnlineOnConnect: false,
   syncFullHistory: false
