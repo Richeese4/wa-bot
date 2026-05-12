@@ -189,47 +189,11 @@ const sock = makeWASocket({
 
 let sockGlobal = sock
 
-// 🔥 TARUH DI SINI
-let pairingInterval = null
-
 // =========================
 // AUTO PAIRING (ANTI SPAM)
 // =========================
-if (!state.creds.registered) {
+let pairingCodeSent = false
 
-  const sendPairing = async () => {
-    try {
-      const code =
-        await sock.requestPairingCode(
-          PAIRING_NUMBER
-        )
-
-      console.log("PAIRING CODE:", code)
-
-    } catch (e) {
-      console.log("PAIR ERROR FULL:", e)
-    }
-  }
-
-  setTimeout(sendPairing, 5000)
-
-  pairingInterval =
-    setInterval(sendPairing, 120000) // 2 menit
-}
-
-  sock.ev.on("creds.update", saveCreds)
-  sock.ev.on(
-  "connection.update",
-  async ({ connection }) => {
-    if (connection === "open") {
-      await saveCreds()
-    }
-  }
-)
-
-  // =========================
-  // CONNECTION
-  // =========================
 sock.ev.on("connection.update", async ({
   connection,
   qr,
@@ -237,42 +201,60 @@ sock.ev.on("connection.update", async ({
 }) => {
 
   if (qr) {
-    qrcode.generate(qr, {
-      small: true
-    })
+    qrcode.generate(qr, { small: true })
+  }
+
+  // saat connecting baru request pairing
+  if (
+    connection === "connecting" &&
+    !state.creds.registered &&
+    !pairingCodeSent
+  ) {
+    pairingCodeSent = true
+
+    try {
+      await new Promise(r =>
+        setTimeout(r, 8000)
+      )
+
+      const code =
+        await sock.requestPairingCode(
+          PAIRING_NUMBER
+        )
+
+      console.log(
+        "PAIRING CODE:",
+        code
+      )
+
+    } catch (e) {
+      console.log(
+        "PAIR ERROR:",
+        e.message
+      )
+
+      pairingCodeSent = false
+    }
   }
 
   if (connection === "open") {
     console.log("BOT ONLINE")
     await saveCreds()
-
-    if (pairingInterval) {
-      clearInterval(pairingInterval)
-      pairingInterval = null
-    }
   }
 
   if (connection === "close") {
-
-    if (pairingInterval) {
-      clearInterval(pairingInterval)
-      pairingInterval = null
-    }
-
     const statusCode =
       lastDisconnect?.error?.output?.statusCode
-
-    const shouldReconnect =
-      statusCode !== DisconnectReason.loggedOut
 
     console.log(
       "DISCONNECTED:",
       statusCode
     )
 
-    if (shouldReconnect) {
-      console.log("Reconnect 5 detik...")
-
+    if (
+      statusCode !==
+      DisconnectReason.loggedOut
+    ) {
       setTimeout(() => {
         startBot()
       }, 5000)
