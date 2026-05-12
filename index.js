@@ -177,13 +177,20 @@ async function startBot() {
   const { version } =
     await fetchLatestBaileysVersion()
 
-  const sock = makeWASocket({
-    version,
-    logger: P({ level: "silent" }),
-    auth: state,
-    browser: ["Ubuntu", "Chrome", "20.0"],
-    printQRInTerminal: false
-  })
+const sock = makeWASocket({
+  version,
+  logger: P({ level: "silent" }),
+  auth: state,
+  browser: ["Ubuntu", "Chrome", "20.0"],
+  printQRInTerminal: false,
+  markOnlineOnConnect: false,
+  syncFullHistory: false
+})
+
+sock.ev.on(
+  "creds.update",
+  saveCreds
+)
 
 let pairingUsed = false
 
