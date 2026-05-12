@@ -1776,7 +1776,6 @@ wa.me/${OWNER_NUMBER}`
 }
 
     } catch (e) {
-
       console.log(
         "ERROR:",
         e.message
@@ -1785,9 +1784,6 @@ wa.me/${OWNER_NUMBER}`
   })
 }
 
-// =========================
-// START
-// =========================
 cleanExpired()
   .then(() => startBot())
   .catch(console.error)
