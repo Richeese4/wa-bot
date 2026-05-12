@@ -177,46 +177,55 @@ async function startBot() {
 
   const { version } =
     await fetchLatestBaileysVersion()
-
 const sock = makeWASocket({
   version,
   logger: P({ level: "silent" }),
   auth: state,
   printQRInTerminal: false,
   syncFullHistory: false,
-  markOnlineOnConnect: false,
-  browser: ["Ubuntu", "Chrome", "20.0.04"]
+  markOnlineOnConnect: true,
+  browser: ["Ubuntu", "Chrome", "20.0"]
 })
 
 let sockGlobal = sock
 
-// =========================
-// AUTO PAIRING (FIX)
-// =========================
-if (!sock.authState.creds.registered) {
+// 🔥 TARUH DI SINI
+let pairingInterval = null
 
-  setTimeout(async () => {
+// =========================
+// AUTO PAIRING (ANTI SPAM)
+// =========================
+if (!state.creds.registered) {
+
+  const sendPairing = async () => {
     try {
       const code =
         await sock.requestPairingCode(
           PAIRING_NUMBER
         )
 
-      console.log(
-        "PAIRING CODE:",
-        code
-      )
+      console.log("PAIRING CODE:", code)
 
     } catch (e) {
-      console.log(
-        "PAIR ERROR:",
-        e.message
-      )
+      console.log("PAIR ERROR FULL:", e)
     }
-  }, 5000)
+  }
+
+  setTimeout(sendPairing, 5000)
+
+  pairingInterval =
+    setInterval(sendPairing, 120000) // 2 menit
 }
 
-sock.ev.on("creds.update", saveCreds)
+  sock.ev.on("creds.update", saveCreds)
+  sock.ev.on(
+  "connection.update",
+  async ({ connection }) => {
+    if (connection === "open") {
+      await saveCreds()
+    }
+  }
+)
 
   // =========================
   // CONNECTION
@@ -236,25 +245,33 @@ sock.ev.on("connection.update", async ({
   if (connection === "open") {
     console.log("BOT ONLINE")
     await saveCreds()
+
+    if (pairingInterval) {
+      clearInterval(pairingInterval)
+      pairingInterval = null
+    }
   }
 
   if (connection === "close") {
 
+    if (pairingInterval) {
+      clearInterval(pairingInterval)
+      pairingInterval = null
+    }
+
     const statusCode =
       lastDisconnect?.error?.output?.statusCode
+
+    const shouldReconnect =
+      statusCode !== DisconnectReason.loggedOut
 
     console.log(
       "DISCONNECTED:",
       statusCode
     )
 
-    if (
-      statusCode !==
-      DisconnectReason.loggedOut
-    ) {
-      console.log(
-        "Reconnect 5 detik..."
-      )
+    if (shouldReconnect) {
+      console.log("Reconnect 5 detik...")
 
       setTimeout(() => {
         startBot()
