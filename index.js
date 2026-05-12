@@ -169,6 +169,7 @@ async function cleanExpired() {
     "expired keys deleted"
   )
 }
+
 async function startBot() {
   const { state, saveCreds } =
     await useMultiFileAuthState("session")
@@ -237,8 +238,7 @@ async function startBot() {
     }
   ) // <- tutup connection.update
 
-} // <- tutup startBot
-  
+
   // =========================
   // AUTO TOLAK TELPON
   // =========================
@@ -267,6 +267,7 @@ async function startBot() {
     }
   })
 
+
   // =========================
   // WELCOME / LEAVE
   // =========================
@@ -274,7 +275,6 @@ async function startBot() {
 
     try {
 
-      // MEMBER MASUK
       if (m.action === "add") {
 
         for (let p of m.participants) {
@@ -297,7 +297,6 @@ async function startBot() {
         }
       }
 
-      // MEMBER KELUAR
       if (m.action === "remove") {
 
         for (let p of m.participants) {
@@ -324,6 +323,7 @@ async function startBot() {
       console.log(e)
     }
   })
+
 
   // =========================
   // MESSAGE
