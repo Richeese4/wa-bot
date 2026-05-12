@@ -171,96 +171,99 @@ async function cleanExpired() {
 }
 
 async function startBot() {
-
   const { state, saveCreds } =
     await useMultiFileAuthState("session")
 
   const { version } =
     await fetchLatestBaileysVersion()
-const sock = makeWASocket({
-  version,
-  logger: P({ level: "silent" }),
-  auth: state,
-  printQRInTerminal: false,
-  syncFullHistory: false,
-  markOnlineOnConnect: true,
-  browser: ["Ubuntu", "Chrome", "20.0"]
-})
 
-let sockGlobal = sock
+  const sock = makeWASocket({
+    version,
+    logger: P({ level: "silent" }),
+    auth: state,
+    browser: ["Ubuntu", "Chrome", "20.0"],
+    printQRInTerminal: false,
+    markOnlineOnConnect: false,
+    syncFullHistory: false
+  })
 
-// =========================
-// AUTO PAIRING (ANTI SPAM)
-// =========================
-let pairingCodeSent = false
+  sock.ev.on("creds.update", saveCreds)
 
-sock.ev.on("connection.update", async ({
-  connection,
-  qr,
-  lastDisconnect
-}) => {
+  let pairingSent = false
 
-  if (qr) {
-    qrcode.generate(qr, { small: true })
-  }
+  sock.ev.on(
+    "connection.update",
+    async ({
+      connection,
+      qr,
+      lastDisconnect
+    }) => {
 
-  // saat connecting baru request pairing
-  if (
-    connection === "connecting" &&
-    !state.creds.registered &&
-    !pairingCodeSent
-  ) {
-    pairingCodeSent = true
-
-    try {
-      await new Promise(r =>
-        setTimeout(r, 8000)
+      console.log(
+        "STATUS:",
+        connection
       )
 
-      const code =
-        await sock.requestPairingCode(
-          PAIRING_NUMBER
+      // request pairing hanya sekali
+      if (
+        connection === "connecting" &&
+        !state.creds.registered &&
+        !pairingSent
+      ) {
+        pairingSent = true
+
+        try {
+          // tunggu socket siap
+          await new Promise(r =>
+            setTimeout(r, 15000)
+          )
+
+          const code =
+            await sock.requestPairingCode(
+              PAIRING_NUMBER
+            )
+
+          console.log(
+            "PAIRING CODE:",
+            code
+          )
+
+        } catch (e) {
+          console.log(
+            "PAIR ERROR FULL:",
+            e
+          )
+          pairingSent = false
+        }
+      }
+
+      if (connection === "open") {
+        console.log("BOT ONLINE")
+      }
+
+      if (connection === "close") {
+        const status =
+          lastDisconnect?.error
+            ?.output?.statusCode
+
+        console.log(
+          "CLOSED:",
+          status
         )
 
-      console.log(
-        "PAIRING CODE:",
-        code
-      )
-
-    } catch (e) {
-      console.log(
-        "PAIR ERROR:",
-        e.message
-      )
-
-      pairingCodeSent = false
+        if (
+          status !==
+          DisconnectReason.loggedOut
+        ) {
+          setTimeout(
+            startBot,
+            5000
+          )
+        }
+      }
     }
-  }
-
-  if (connection === "open") {
-    console.log("BOT ONLINE")
-    await saveCreds()
-  }
-
-  if (connection === "close") {
-    const statusCode =
-      lastDisconnect?.error?.output?.statusCode
-
-    console.log(
-      "DISCONNECTED:",
-      statusCode
-    )
-
-    if (
-      statusCode !==
-      DisconnectReason.loggedOut
-    ) {
-      setTimeout(() => {
-        startBot()
-      }, 5000)
-    }
-  }
-})
+  )
+}
   
   // =========================
   // AUTO TOLAK TELPON
