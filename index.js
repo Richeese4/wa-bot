@@ -185,59 +185,82 @@ async function startBot() {
     printQRInTerminal: false
   })
 
-  sock.ev.on(
-    "connection.update",
-    async ({
-      connection,
-      lastDisconnect
-    }) => {
+let pairingUsed = false
+
+sock.ev.on(
+  "connection.update",
+  async ({
+    connection,
+    lastDisconnect,
+    qr
+  }) => {
+
+    console.log(
+      "CONNECTION:",
+      connection
+    )
+
+    try {
+
+      // request pairing hanya sekali
+      if (
+        !state.creds.registered &&
+        !pairingUsed
+      ) {
+        pairingUsed = true
+
+        await new Promise(r =>
+          setTimeout(r, 5000)
+        )
+
+        const code =
+          await sock.requestPairingCode(
+            PAIRING_NUMBER
+          )
+
+        console.log(
+          "PAIRING CODE:",
+          code
+        )
+      }
+
+    } catch (e) {
+
+      pairingUsed = false
+
+      console.log(
+        "PAIR ERROR:",
+        e.message
+      )
+    }
+
+    if (connection === "open") {
+      console.log("BOT ONLINE")
+    }
+
+    if (connection === "close") {
+
+      const status =
+        lastDisconnect?.error
+          ?.output?.statusCode
+
+      console.log(
+        "DISCONNECTED:",
+        status
+      )
 
       if (
-        connection === "connecting" &&
-        !state.creds.registered
+        status !==
+        DisconnectReason.loggedOut
       ) {
-        try {
-          await new Promise(r =>
-            setTimeout(r, 15000)
-          )
-
-          const code =
-            await sock.requestPairingCode(
-              PAIRING_NUMBER
-            )
-
-          console.log(
-            "PAIRING CODE:",
-            code
-          )
-
-        } catch (e) {
-          console.log(e)
-        }
-      }
-
-      if (connection === "open") {
-        console.log("BOT ONLINE")
-      }
-
-      if (connection === "close") {
-        const status =
-          lastDisconnect?.error
-            ?.output?.statusCode
-
-        if (
-          status !==
-          DisconnectReason.loggedOut
-        ) {
-          setTimeout(
-            startBot,
-            5000
-          )
-        }
+        setTimeout(
+          startBot,
+          5000
+        )
       }
     }
-  ) // <- tutup connection.update
-
+  }
+)
 
   // =========================
   // AUTO TOLAK TELPON
