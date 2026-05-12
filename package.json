@@ -19,6 +19,7 @@
     "fs": "^0.0.1-security",
     "midtrans-client": "^1.4.3",
     "mongoose": "^9.6.1",
+    "node-cache": "^5.1.2",
     "pino": "^10.3.1",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.34.5",
