@@ -1,3 +1,4 @@
+const NodeCache = require("node-cache")
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
@@ -141,7 +142,7 @@ function normalize(id = "") {
 // =========================
 // START BOT
 // =========================
-const PAIRING_NUMBER = "6282218125138"
+const PAIRING_NUMBER = "6285285738987"
 async function cleanExpired() {
 
   const expired =
@@ -177,16 +178,23 @@ async function startBot() {
   const { version } =
     await fetchLatestBaileysVersion()
 
-const PAIRING_NUMBER = "6285285738987"
-
 const sock = makeWASocket({
   version,
   logger: P({ level: "silent" }),
   auth: state,
-  browser: ["Windows", "Chrome", "120.0.0.0"],
   printQRInTerminal: false,
   markOnlineOnConnect: false,
-  syncFullHistory: false
+  syncFullHistory: false,
+
+browser: [
+  "Windows",
+  "Chrome",
+  "131.0.6778.86"
+],
+  
+  connectTimeoutMs: 60000,
+  keepAliveIntervalMs: 10000,
+  msgRetryCounterCache: new NodeCache()
 })
 
 sock.ev.on(
@@ -194,32 +202,40 @@ sock.ev.on(
   saveCreds
 )
 
+  async function safeSend(jid, content, options = {}) {
+  try {
+    await new Promise(r => setTimeout(r, 1500))
+    return await sock.sendMessage(
+      jid,
+      content,
+      options
+    )
+  } catch (e) {
+    console.log(
+      "SEND ERROR:",
+      e.message
+    )
+  }
+}
+
 let pairingUsed = false
 
 sock.ev.on(
   "connection.update",
-  async ({
-    connection,
-    lastDisconnect,
-    qr
-  }) => {
+  async ({ connection, lastDisconnect }) => {
 
-    console.log(
-      "CONNECTION:",
-      connection
-    )
+    console.log("CONNECTION:", connection)
 
     try {
-
-      // request pairing hanya sekali
       if (
+        connection === "connecting" &&
         !state.creds.registered &&
         !pairingUsed
       ) {
         pairingUsed = true
 
         await new Promise(r =>
-          setTimeout(r, 5000)
+          setTimeout(r, 10000)
         )
 
         const code =
@@ -234,9 +250,6 @@ sock.ev.on(
       }
 
     } catch (e) {
-
-      pairingUsed = false
-
       console.log(
         "PAIR ERROR:",
         e.message
@@ -245,10 +258,10 @@ sock.ev.on(
 
     if (connection === "open") {
       console.log("BOT ONLINE")
+      pairingUsed = true
     }
 
     if (connection === "close") {
-
       const status =
         lastDisconnect?.error
           ?.output?.statusCode
@@ -259,18 +272,23 @@ sock.ev.on(
       )
 
       if (
-        status !==
+        status ===
         DisconnectReason.loggedOut
       ) {
-        setTimeout(
-          startBot,
-          5000
+        console.log(
+          "SESSION LOGGED OUT"
         )
+        return
       }
+
+      setTimeout(
+        () => startBot(),
+        15000
+      )
     }
   }
 )
-
+    
   // =========================
   // AUTO TOLAK TELPON
   // =========================
@@ -282,10 +300,10 @@ sock.ev.on(
 
         if (call.status === "offer") {
 
-          await sock.rejectCall(
-            call.id,
-            call.from
-          )
+console.log(
+  "CALL DETECTED:",
+  call.from
+)
 
           console.log(
             "AUTO REJECT CALL:",
@@ -313,7 +331,7 @@ sock.ev.on(
 
           if (fs.existsSync("./welcome.jpg")) {
 
-            await sock.sendMessage(m.id, {
+            await safeSend(m.id, {
               image: fs.readFileSync("./welcome.jpg"),
               caption: `👋 Welcome @${p.split("@")[0]}`,
               mentions: [p]
@@ -321,7 +339,7 @@ sock.ev.on(
 
           } else {
 
-            await sock.sendMessage(m.id, {
+            await safeSend(m.id, {
               text: `👋 Welcome @${p.split("@")[0]}`,
               mentions: [p]
             })
@@ -335,7 +353,7 @@ sock.ev.on(
 
           if (fs.existsSync("./keluar.jpg")) {
 
-            await sock.sendMessage(m.id, {
+            await safeSend(m.id, {
               image: fs.readFileSync("./keluar.jpg"),
               caption: `👋 @${p.split("@")[0]} keluar`,
               mentions: [p]
@@ -343,7 +361,7 @@ sock.ev.on(
 
           } else {
 
-            await sock.sendMessage(m.id, {
+            await safeSend(m.id, {
               text: `👋 @${p.split("@")[0]} keluar`,
               mentions: [p]
             })
@@ -378,13 +396,6 @@ sock.ev.on(
 
       const isGroup =
         from.endsWith("@g.us")
-
-      // =========================
-      // AUTO READ
-      // =========================
-      await sock.readMessages([
-        msg.key
-      ])
 
       // =========================
       // SENDER
@@ -769,7 +780,7 @@ wa.me/${OWNER_NUMBER}`
 
           if (botAdmin) {
 
-            await sock.sendMessage(from, {
+            await safeSend(from, {
               delete: msg.key
             })
           }
@@ -801,7 +812,7 @@ if (
   // =====================
   // HAPUS PESAN LINK
   // =====================
-  await sock.sendMessage(from, {
+  await safeSend(from, {
     delete: msg.key
   })
 
@@ -854,7 +865,7 @@ Pesan berhasil dihapus`,
     settings.markModified("warns")
     await settings.save()
 
-    await sock.sendMessage(from, {
+    await safeSend(from, {
       text:
 `⚠️ Warning ${maxWarn}/${maxWarn}
 
@@ -1283,11 +1294,19 @@ if (command === ".kick") {
 
   console.log("TARGET KICK:", target)
 
-  await sock.groupParticipantsUpdate(
-    from,
-    [target],
-    "remove"
-  )
+await new Promise(r =>
+  setTimeout(r, 2000)
+)
+
+await new Promise(r =>
+  setTimeout(r, 2000)
+)
+
+await sock.groupParticipantsUpdate(
+  from,
+  [target],
+  "remove"
+)
 
   return reply("✅ Berhasil kick member")
 }
@@ -1363,7 +1382,7 @@ atau reply gambar lalu ketik:
   const stickerBuffer =
     await sticker.toBuffer()
 
-  await sock.sendMessage(
+  await safeSend(
     from,
     {
       sticker: stickerBuffer
@@ -1629,7 +1648,7 @@ return reply(
 
   for (const s of sessions) {
 
-    await sock.sendMessage(s.group, {
+    await safeSend(s.group, {
       text:
 `✅ MASA AKTIF DITAMBAHKAN
 
@@ -1713,7 +1732,7 @@ if (command === ".deltime") {
 
   for (const s of sessions) {
 
-    await sock.sendMessage(s.group, {
+    await safeSend(s.group, {
       text:
 `⚠️ MASA AKTIF DIKURANGI
 
@@ -1777,7 +1796,7 @@ if (command === ".delkey") {
   // NOTIF USER
   for (const s of sessions) {
 
-    await sock.sendMessage(s.group, {
+    await safeSend(s.group, {
       text:
 `❌ KEY DIHAPUS OWNER
 
