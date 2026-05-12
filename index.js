@@ -169,7 +169,6 @@ async function cleanExpired() {
     "expired keys deleted"
   )
 }
-
 async function startBot() {
   const { state, saveCreds } =
     await useMultiFileAuthState("session")
@@ -182,38 +181,21 @@ async function startBot() {
     logger: P({ level: "silent" }),
     auth: state,
     browser: ["Ubuntu", "Chrome", "20.0"],
-    printQRInTerminal: false,
-    markOnlineOnConnect: false,
-    syncFullHistory: false
+    printQRInTerminal: false
   })
-
-  sock.ev.on("creds.update", saveCreds)
-
-  let pairingSent = false
 
   sock.ev.on(
     "connection.update",
     async ({
       connection,
-      qr,
       lastDisconnect
     }) => {
 
-      console.log(
-        "STATUS:",
-        connection
-      )
-
-      // request pairing hanya sekali
       if (
         connection === "connecting" &&
-        !state.creds.registered &&
-        !pairingSent
+        !state.creds.registered
       ) {
-        pairingSent = true
-
         try {
-          // tunggu socket siap
           await new Promise(r =>
             setTimeout(r, 15000)
           )
@@ -229,11 +211,7 @@ async function startBot() {
           )
 
         } catch (e) {
-          console.log(
-            "PAIR ERROR FULL:",
-            e
-          )
-          pairingSent = false
+          console.log(e)
         }
       }
 
@@ -246,11 +224,6 @@ async function startBot() {
           lastDisconnect?.error
             ?.output?.statusCode
 
-        console.log(
-          "CLOSED:",
-          status
-        )
-
         if (
           status !==
           DisconnectReason.loggedOut
@@ -262,8 +235,9 @@ async function startBot() {
         }
       }
     }
-  )
-}
+  ) // <- tutup connection.update
+
+} // <- tutup startBot
   
   // =========================
   // AUTO TOLAK TELPON
