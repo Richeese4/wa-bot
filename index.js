@@ -494,55 +494,59 @@ async function reply(text) {
       }
       
 // =========================
-// ADMIN CHECK FIX LID
+// ADMIN CHECK FINAL FIX
 // =========================
 let isAdmin = false
 let botAdmin = false
 
 if (isGroup) {
-
   const meta =
     await sock.groupMetadata(from)
 
-  const senderIds = [
-    normalize(msg.key.participant),
-    normalize(sender)
-  ].filter(Boolean)
-
+  // cari sender
   const member =
-    meta.participants.find(p =>
-      senderIds.includes(
-        normalize(p.id)
+    meta.participants.find(p => {
+
+      const ids = [
+        p.id,
+        p.jid,
+        p.phoneNumber
+      ]
+      .filter(Boolean)
+      .map(x => normalize(x))
+
+      return ids.includes(
+        normalize(msg.key.participant)
       )
-    )
+    })
 
   isAdmin =
     member?.admin === "admin" ||
     member?.admin === "superadmin"
 
-  let bot =
+  // cari bot
+  const bot =
     meta.participants.find(p => {
-      const jid = p.jid || ""
 
-      return (
-        normalize(jid) ===
+      const ids = [
+        p.id,
+        p.jid,
+        p.phoneNumber
+      ]
+      .filter(Boolean)
+      .map(x => normalize(x))
+
+      return ids.includes(
         normalize(sock.user.id)
       )
     })
-
-  if (!bot) {
-    bot =
-      meta.participants.find(p =>
-        normalize(p.id) ===
-        normalize(sock.user.id)
-      )
-  }
 
   botAdmin =
     bot?.admin === "admin" ||
     bot?.admin === "superadmin"
 
   console.log("===== FINAL CHECK =====")
+  console.log("BOT ID:", sock.user.id)
   console.log("MEMBER:", member)
   console.log("BOT:", bot)
   console.log("isAdmin:", isAdmin)
