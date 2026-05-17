@@ -461,7 +461,16 @@ const text =
   m?.documentMessage?.caption ||
   ""
 
-if (!text) return
+// =========================
+// PROTOCOL EDIT MESSAGE
+// =========================
+const protocol =
+  msg.message?.protocolMessage
+
+if (
+  !text &&
+  !protocol?.editedMessage
+) return
 
       const cmd = text.trim()
 
@@ -915,6 +924,61 @@ Jangan kirim link lagi
 Sisa warning: ${left}`,
     mentions: [senderJid]
   })
+}
+
+// =========================
+// EDIT MESSAGE BACKUP
+// =========================
+if (protocol?.editedMessage) {
+
+  const em =
+    protocol.editedMessage
+
+  const editedText =
+    em?.conversation ||
+    em?.extendedTextMessage?.text ||
+    em?.imageMessage?.caption ||
+    em?.videoMessage?.caption ||
+    em?.documentMessage?.caption ||
+    ""
+
+  console.log(
+    "UPSERT EDIT:",
+    editedText
+  )
+
+  console.log(
+    "UPSERT LINK:",
+    isLink(editedText)
+  )
+
+  if (
+    isGroup &&
+    settings?.antilink &&
+    isLink(editedText)
+  ) {
+
+    if (!botAdmin) return
+
+    await sock.sendMessage(from, {
+      delete: {
+        remoteJid: from,
+        fromMe: false,
+        id: msg.key.id,
+        participant:
+          msg.key.participant
+      }
+    })
+
+    await safeSend(from, {
+      text:
+`⚠️ Link hasil edit terdeteksi
+
+Pesan berhasil dihapus`
+    })
+
+    return
+  }
 }
       
       // =========================
