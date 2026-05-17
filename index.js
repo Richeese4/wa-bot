@@ -187,7 +187,7 @@ const sock = makeWASocket({
   auth: state,
   printQRInTerminal: false,
   markOnlineOnConnect: false,
-  syncFullHistory: false,
+  syncFullHistory: true,
 
 browser: [
   "Windows",
