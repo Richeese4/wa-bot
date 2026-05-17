@@ -119,16 +119,13 @@ function format(ms) {
 // DETECT LINK
 // =========================
 function isLink(text = "") {
-
-  // bersihkan text
   const clean =
     text
       .toLowerCase()
       .replace(/\s+/g, "")
       .replace(/[\u200B-\u200D\uFEFF]/g, "")
 
-  // hanya detect invite group WhatsApp
-  return /chat\.whatsapp\.com\/[A-Za-z0-9]+/i
+  return /chat\.whatsapp\.com\/[a-z0-9]+(\?[^ ]*)?/i
     .test(clean)
 }
 
@@ -1888,8 +1885,13 @@ const text =
   em?.imageMessage?.caption ||
   em?.videoMessage?.caption ||
   em?.documentMessage?.caption ||
+  em?.editedMessage?.conversation ||
+  em?.editedMessage?.extendedTextMessage?.text ||
   ""
 
+console.log("EDIT TEXT:", text)
+console.log("LINK DETECT:", isLink(text))
+  
       if (!text) continue
 
       const key =
@@ -1952,9 +1954,14 @@ const text =
         continue
 
       // hapus pesan edit
-      await safeSend(from, {
-        delete: key
-      })
+await sock.sendMessage(from, {
+  delete: {
+    remoteJid: from,
+    fromMe: false,
+    id: key.id,
+    participant: key.participant
+  }
+})
 
       // notif
       await safeSend(from, {
