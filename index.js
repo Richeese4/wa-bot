@@ -118,12 +118,18 @@ function format(ms) {
 // =========================
 // DETECT LINK
 // =========================
-function isLink(text) {
+function isLink(text = "") {
 
-  const regex =
-    /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me)/gi
+  // bersihkan text
+  const clean =
+    text
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
 
-  return regex.test(text)
+  // hanya detect invite group WhatsApp
+  return /chat\.whatsapp\.com\/[A-Za-z0-9]+/i
+    .test(clean)
 }
 
 // =========================
@@ -441,17 +447,24 @@ async function reply(text) {
   return buffer
 }
 
-      // =========================
-      // TEXT
-      // =========================
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        msg.message.videoMessage?.caption ||
-        ""
+// =========================
+// TEXT FINAL FIX
+// =========================
+const m =
+  msg.message?.ephemeralMessage?.message ||
+  msg.message?.viewOnceMessage?.message ||
+  msg.message?.documentWithCaptionMessage?.message ||
+  msg.message
 
-      if (!text) return
+const text =
+  m?.conversation ||
+  m?.extendedTextMessage?.text ||
+  m?.imageMessage?.caption ||
+  m?.videoMessage?.caption ||
+  m?.documentMessage?.caption ||
+  ""
+
+if (!text) return
 
       const cmd = text.trim()
 
