@@ -1850,6 +1850,134 @@ wa.me/${OWNER_NUMBER}`
       )
     }
   })
+
+  // =========================
+// DETECT EDITED MESSAGE LINK
+// =========================
+sock.ev.on("messages.update", async (updates) => {
+
+  try {
+
+for (const u of updates) {
+
+  console.log(JSON.stringify(u, null, 2))
+
+  const update = u.update
+
+      if (!update) continue
+
+const edited =
+  update.editedMessage ||
+  update.message?.editedMessage ||
+  update.protocolMessage?.editedMessage ||
+  update.message?.protocolMessage?.editedMessage ||
+  update.protocolMessage ||
+  update.message?.protocolMessage
+
+      if (!edited) continue
+
+const em =
+  edited.editedMessage ||
+  edited.protocolMessage?.editedMessage ||
+  edited.message ||
+  edited
+
+const text =
+  em?.conversation ||
+  em?.extendedTextMessage?.text ||
+  em?.imageMessage?.caption ||
+  em?.videoMessage?.caption ||
+  em?.documentMessage?.caption ||
+  ""
+
+      if (!text) continue
+
+      const key =
+        update.key ||
+        update.message?.protocolMessage?.key ||
+        update.protocolMessage?.key ||
+        u.key
+
+      if (!key?.remoteJid) continue
+
+      const from =
+        key.remoteJid
+
+      if (!from.endsWith("@g.us"))
+        continue
+
+      // cek antilink
+      const settings =
+        await GroupSettings.findOne({
+          group: from
+        })
+
+      if (!settings?.antilink)
+        continue
+
+      // hanya detect invite group
+      if (!isLink(text))
+        continue
+
+      // metadata group
+      const meta =
+        await sock.groupMetadata(from)
+
+      // cari sender
+      const sender =
+        normalize(
+          key.participant
+        )
+
+      const member =
+        meta.participants.find(p => {
+
+          const ids = [
+            p.id,
+            p.jid,
+            p.phoneNumber
+          ]
+          .filter(Boolean)
+          .map(x => normalize(x))
+
+          return ids.includes(sender)
+        })
+
+      const isAdmin =
+        member?.admin === "admin" ||
+        member?.admin === "superadmin"
+
+      // bypass admin
+      if (isAdmin)
+        continue
+
+      // hapus pesan edit
+      await safeSend(from, {
+        delete: key
+      })
+
+      // notif
+      await safeSend(from, {
+        text:
+`⚠️ Link Terdeteksi Di EDIT
+
+Pesan berhasil dihapus`
+      })
+
+      console.log(
+        "EDIT LINK DETECTED:",
+        sender
+      )
+    }
+
+  } catch (e) {
+
+    console.log(
+      "EDIT LINK ERROR:",
+      e.message
+    )
+  }
+})
 }
 
 cleanExpired()
